@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import type { InputConfigT } from 'metro-config';
 
-import { DefaultReactNativeHarmonyPackage } from './constants';
+import { DefaultReactNativeHarmonyPackage, HarmonyPlatform } from './constants';
 import {
   createWithHarmonyConfig,
   type CreateHarmonyMetroConfig,
@@ -20,78 +20,108 @@ interface HarmonyMetroConfigPeer {
   createHarmonyMetroConfig?: CreateHarmonyMetroConfig;
 }
 
+interface AutolinkingPlatforms {
+  getSupportPackageForPlatform?: (platform: string) => string | null;
+}
+
 type WithHarmonyConfig = ReturnType<typeof createWithHarmonyConfig>;
 
 const Implementations = new Map<string, WithHarmonyConfig>();
 
-function loadPeer<T>(projectRequire: NodeRequire, moduleName: string): T {
+function patchAutolinking(root: string, runtime: string): void {
+  let platforms: AutolinkingPlatforms;
+
   try {
-    return projectRequire(moduleName) as T;
+    const require = createRequire(path.join(root, 'package.json'));
+    const expo = createRequire(require.resolve('expo/package.json'));
+
+    platforms = expo('expo-modules-autolinking/build/platforms') as AutolinkingPlatforms;
+  } catch {
+    return;
+  }
+
+  const original = platforms.getSupportPackageForPlatform;
+  if (typeof original !== 'function') return;
+
+  try {
+    if (original(HarmonyPlatform) === runtime) return;
+  } catch {
+    // Expo SDK 55 rejects unknown platforms.
+  }
+
+  // Expo re-exports this module with getters, so the CLI sees the replacement.
+  platforms.getSupportPackageForPlatform = (platform: string) => platform === HarmonyPlatform
+    ? runtime
+    : original(platform);
+}
+
+function loadPeer<T>(require: NodeRequire, name: string): T {
+  try {
+    return require(name) as T;
   } catch (cause) {
     throw new ExpoHarmonyMetroError(
       'ERR_EXPO_HARMONY_MISSING_PEER_DEPENDENCY',
-      `@expo-harmony/metro-config could not load its peer dependency "${moduleName}". `
+      `@expo-harmony/metro-config could not load its peer dependency "${name}". `
       + 'Install it in the app that owns the Metro configuration.',
       { cause }
     );
   }
 }
 
-function getPeerVersion(projectRequire: NodeRequire, packageName: string): string {
+function getPeerVersion(require: NodeRequire, name: string): string {
   try {
-    const manifest = projectRequire(`${packageName}/package.json`) as { version?: unknown };
+    const manifest = require(`${name}/package.json`) as { version?: unknown };
+
     return typeof manifest.version === 'string' ? manifest.version : 'unknown';
   } catch {
     return 'unknown';
   }
 }
 
-function getImplementation(projectRoot: string, harmonyPackage: string): WithHarmonyConfig {
-  const key = `${projectRoot}\0${harmonyPackage}`;
+function getImplementation(root: string, runtime: string): WithHarmonyConfig {
+  const key = `${root}\0${runtime}`;
   const cached = Implementations.get(key);
   if (cached) return cached;
 
-  const projectRequire = createRequire(path.join(projectRoot, 'package.json'));
-  const metro = loadPeer<MetroConfigPeer>(projectRequire, 'metro-config');
-  const harmony = loadPeer<HarmonyMetroConfigPeer>(projectRequire, `${harmonyPackage}/metro.config`);
+  const require = createRequire(path.join(root, 'package.json'));
+  const metro = loadPeer<MetroConfigPeer>(require, 'metro-config');
+  const harmony = loadPeer<HarmonyMetroConfigPeer>(require, `${runtime}/metro.config`);
 
   if (typeof metro.mergeConfig !== 'function') {
     throw new ExpoHarmonyMetroError(
       'ERR_EXPO_HARMONY_INCOMPATIBLE_PEER_DEPENDENCY',
       '@expo-harmony/metro-config requires metro-config to expose mergeConfig(); '
-      + `the project resolved version ${getPeerVersion(projectRequire, 'metro-config')}.`
+      + `the project resolved version ${getPeerVersion(require, 'metro-config')}.`
     );
   }
   if (typeof harmony.createHarmonyMetroConfig !== 'function') {
     throw new ExpoHarmonyMetroError(
       'ERR_EXPO_HARMONY_INCOMPATIBLE_PEER_DEPENDENCY',
-      `@expo-harmony/metro-config requires ${harmonyPackage} to expose `
+      `@expo-harmony/metro-config requires ${runtime} to expose `
       + 'the /metro.config createHarmonyMetroConfig() export; '
-      + `the project resolved version ${getPeerVersion(projectRequire, harmonyPackage)}.`
+      + `the project resolved version ${getPeerVersion(require, runtime)}.`
     );
   }
 
-  const implementation = createWithHarmonyConfig({
+  const apply = createWithHarmonyConfig({
     createHarmonyMetroConfig: harmony.createHarmonyMetroConfig,
     mergeConfig: metro.mergeConfig,
   });
-  Implementations.set(key, implementation);
+  Implementations.set(key, apply);
 
-  return implementation;
+  return apply;
 }
 
-/**
- * 将 Expo Metro 配置与 RNOH 配置组合。options.enabled 为 false 时原样
- * 返回 config，且不会加载 RNOH 和 metro-config peer dependencies。
- */
 export function withHarmonyConfig<T extends InputConfigT>(
   config: T,
   options: WithHarmonyConfigOptions = {}
 ): T & InputConfigT {
   if (options.enabled === false) return config;
 
-  const projectRoot = path.resolve(options.projectRoot ?? config.projectRoot ?? process.cwd());
-  const harmonyPackage = options.reactNativeHarmonyPackageName ?? DefaultReactNativeHarmonyPackage;
+  const root = path.resolve(options.projectRoot ?? config.projectRoot ?? process.cwd());
+  const runtime = options.reactNativeHarmonyPackageName ?? DefaultReactNativeHarmonyPackage;
 
-  return getImplementation(projectRoot, harmonyPackage)(config, { ...options, projectRoot });
+  patchAutolinking(root, runtime);
+
+  return getImplementation(root, runtime)(config, { ...options, projectRoot: root });
 }
