@@ -47,7 +47,15 @@ abstract class NotificationsModule extends ExpoModule {
 
   protected queue<T>(operation: () => Promise<T>): Promise<T> {
     return this.store.run((): Promise<T> => {
-      // The context checks its lifetime before queued work can produce effects.
+      // The epoch getter validates runtime lifetime.
+      this.context.runtimeEpoch;
+
+      return operation();
+    });
+  }
+
+  protected queueToken<T>(operation: () => Promise<T>): Promise<T> {
+    return this.store.runToken((): Promise<T> => {
       this.context.runtimeEpoch;
 
       return operation();
@@ -99,18 +107,17 @@ export class ExpoPushTokenManager extends NotificationsModule {
       .asyncFunction(
         'unregisterForNotificationsAsync',
         (): Promise<void> =>
-          this.queue(async (): Promise<void> => {
-            // Disable automatic refresh durably before deleting the system token.
-            // A late tokenUpdate/foreground callback must not register it again.
+          this.queueToken(async (): Promise<void> => {
+            // Persist opt-out so late token callbacks cannot re-register.
             await this.store.clearToken();
+
             await pushService.deleteToken();
           }),
       );
   }
 
   private refreshToken(): void {
-    this.queue(async (): Promise<void> => {
-      // Recheck inside the queue: unregister may have run since the lifecycle event.
+    this.queueToken(async (): Promise<void> => {
       if (this.store.lastToken !== undefined) await this.fetchToken();
     }).catch((error: Object): void => {
       if (this.alive) this.context.logger.warn(`Unable to refresh Push Kit registration (code ${(error as BusinessError).code}).`);
@@ -118,12 +125,13 @@ export class ExpoPushTokenManager extends NotificationsModule {
   }
 
   private token(): Promise<string> {
-    return this.queue((): Promise<string> => this.fetchToken());
+    return this.queueToken((): Promise<string> => this.fetchToken());
   }
 
   private async fetchToken(): Promise<string> {
     const store = this.store;
     const token = await pushService.getToken();
+
     if (token.length === 0) {
       throw new ExpoModuleError('ERR_NOTIFICATIONS_PUSH_TOKEN', 'Push Kit returned an empty token.');
     }
@@ -138,20 +146,23 @@ export class ExpoNotificationPermissionsModule extends NotificationsModule {
   definition(): ExpoModuleDefinition {
     return new ExpoModuleDefinition()
       .name('ExpoNotificationPermissionsModule')
-      .asyncFunction(
-        'getPermissionsAsync',
-        (): Promise<Record<string, ESObject>> => this.queue((): Promise<Record<string, ESObject>> => this.permissions()),
-      )
+      .asyncFunction('getPermissionsAsync', (): Promise<Record<string, ESObject>> => this.permissions())
       .asyncFunction(
         'requestPermissionsAsync',
         ExpoFunction.typed1(
           NotificationRecord.optional(),
-          (_options?: ESObject): Promise<Record<string, ESObject>> =>
-            this.queue(async (): Promise<Record<string, ESObject>> => {
-              if (await notificationManager.isNotificationEnabled()) return this.permissions();
+          async (_options?: ESObject): Promise<Record<string, ESObject>> => {
+            this.context.runtimeEpoch;
+
+            const store = this.store;
+            const context = this.context.uiAbilityContext;
+
+            // Keep the shared request independent of runtime lifetime.
+            await store.requestPermissions(async (): Promise<void> => {
+              if (await notificationManager.isNotificationEnabled()) return;
 
               try {
-                await notificationManager.requestEnableNotification(this.context.uiAbilityContext);
+                await notificationManager.requestEnableNotification(context);
               } catch (error) {
                 if ((error as BusinessError).code !== NOTIFICATIONS_DISABLED) {
                   throw new ExpoModuleError(
@@ -162,17 +173,21 @@ export class ExpoNotificationPermissionsModule extends NotificationsModule {
                 }
               }
 
-              await this.store.write('permissionRequested', true);
+              await store.write('permissionRequested', true);
+            });
 
-              return this.permissions();
-            }),
+            return this.permissions();
+          },
         ),
       );
   }
 
   private async permissions(): Promise<Record<string, ESObject>> {
+    this.context.runtimeEpoch;
+
     const granted = await notificationManager.isNotificationEnabled();
     const asked = this.store.read<boolean>('permissionRequested', false);
+
     if (granted && !asked) await this.store.write('permissionRequested', true);
 
     const settings = await notificationManager.getNotificationSetting();

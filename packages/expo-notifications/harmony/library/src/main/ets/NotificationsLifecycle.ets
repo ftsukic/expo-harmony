@@ -112,7 +112,7 @@ class PushLifecycle extends AbilityLifecycleCallback {
 
       this.listener = (token: string): void => {
         store
-          .run(async (): Promise<void> => {
+          .runToken(async (): Promise<void> => {
             if (store.lastToken !== undefined) await store.updateToken(token);
           })
           .catch((error: Object): void => report(error));

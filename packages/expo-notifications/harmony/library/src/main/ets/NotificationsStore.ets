@@ -20,10 +20,27 @@ export type NotificationReceiver = (notification: Notification) => void;
 export type ResponseReceiver = (response: NotificationResponse) => void;
 export type TokenReceiver = (token: string) => void;
 
+class OperationQueue {
+  private tail: Promise<void> = Promise.resolve();
+
+  run<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.tail.then(operation);
+    this.tail = result.then(
+      (): void => {},
+      (): void => {},
+    );
+
+    return result;
+  }
+}
+
 export class NotificationsStore {
   private static instances: Map<string, NotificationsStore> = new Map();
   private readonly storage: preferences.Preferences;
-  private tail: Promise<void> = Promise.resolve();
+  private readonly notifications: OperationQueue = new OperationQueue();
+  private readonly registration: OperationQueue = new OperationQueue();
+  private readonly writes: OperationQueue = new OperationQueue();
+  private permission?: Promise<void>;
   private failure?: Object;
   readonly received: Map<common.UIAbilityContext, Set<NotificationReceiver>> = new Map();
   readonly responses: Set<ResponseReceiver> = new Set();
@@ -46,10 +63,26 @@ export class NotificationsStore {
   }
 
   run<T>(operation: () => Promise<T>): Promise<T> {
-    const result = this.tail.then(operation);
-    this.tail = result.then(
-      (): void => {},
-      (): void => {},
+    return this.notifications.run(operation);
+  }
+
+  runToken<T>(operation: () => Promise<T>): Promise<T> {
+    return this.registration.run(operation);
+  }
+
+  requestPermissions(operation: () => Promise<void>): Promise<void> {
+    if (this.permission !== undefined) return this.permission;
+
+    const result = Promise.resolve().then(operation);
+    this.permission = result;
+
+    result.then(
+      (): void => {
+        this.permission = undefined;
+      },
+      (): void => {
+        this.permission = undefined;
+      },
     );
 
     return result;
@@ -66,7 +99,12 @@ export class NotificationsStore {
     }
   }
 
-  async write<T>(key: string, value: T): Promise<void> {
+  write<T>(key: string, value: T): Promise<void> {
+    // Preferences.flush commits every key, so writes and rollback must share a queue.
+    return this.writes.run((): Promise<void> => this.persist(key, value));
+  }
+
+  private async persist<T>(key: string, value: T): Promise<void> {
     if (this.failure !== undefined) {
       throw new ExpoModuleError(
         'ERR_NOTIFICATIONS_STORAGE',
@@ -76,6 +114,7 @@ export class NotificationsStore {
     }
 
     const previous = this.storage.getSync(key, '');
+
     this.storage.putSync(key, JSON.stringify(value));
 
     try {
