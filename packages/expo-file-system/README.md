@@ -286,7 +286,9 @@ npm install @expo-harmony/expo-file-system expo-file-system@55.0.26
 
 类型：`Directory`，只读
 
-打包资源目录，地址为 `asset:///`，只读。
+打包资源目录，地址为 `rawfile:///`，只读。这个目录对应 HarmonyOS 的 `rawfile` 根目录。
+
+RNOH/Metro 生成的 `asset://path/to/file` 则对应 `rawfile/assets/path/to/file`，可以直接交给 `File` 或 Legacy 文件读取接口。文件对象返回的地址会规范化为 `rawfile:///assets/path/to/file`，重新构造对象或传给音频、资源等模块后仍指向同一资源。`rawfile://path/to/file` 和 `asset:///path/to/file` 继续相对于 `rawfile` 根目录解析。
 
 #### `Paths.appleSharedContainers`
 

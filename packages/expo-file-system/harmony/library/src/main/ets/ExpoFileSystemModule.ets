@@ -1416,11 +1416,11 @@ class FileSystemFile extends ExpoSharedObject {
   }
 
   uri(): string {
-    return this.bundled ? toAssetUri(this.rawPathValue, false) : toFileUri(this.pathValue);
+    return this.bundled ? toRawUri(this.rawPathValue, false) : toFileUri(this.pathValue);
   }
 
   rawUri(): string {
-    return toAssetUri(this.rawPathValue, false);
+    return toRawUri(this.rawPathValue, false);
   }
 
   setPath(path: string): void {
@@ -1458,7 +1458,7 @@ class FileSystemDirectory extends ExpoSharedObject {
   }
 
   uri(): string {
-    return this.bundled ? toAssetUri(this.rawPathValue, true) : toFileUri(this.pathValue, true);
+    return this.bundled ? toRawUri(this.rawPathValue, true) : toFileUri(this.pathValue, true);
   }
 
   setPath(path: string): void {
@@ -1741,7 +1741,7 @@ export class ExpoFileSystemModule extends ExpoModule {
       .name('FileSystem')
       .constant('documentDirectory', (): string => toFileUri(this.state.documentPath, true))
       .constant('cacheDirectory', (): string => toFileUri(this.state.cachePath, true))
-      .constant('bundleDirectory', 'asset:///')
+      .constant('bundleDirectory', 'rawfile:///')
       .constant('appleSharedContainers', new Object())
       .property('totalDiskSpace', ExpoValueTypes.number(), (): number => statvfs.getTotalSizeSync(this.state.documentPath))
       .property('availableDiskSpace', ExpoValueTypes.number(), (): number => statvfs.getFreeSizeSync(this.state.documentPath))
@@ -1819,7 +1819,7 @@ export class ExponentFileSystemModule extends ExpoModule {
       .name('ExponentFileSystem')
       .constant('documentDirectory', (): string => this.context.persistentFilesDirectory)
       .constant('cacheDirectory', (): string => this.context.cacheDirectory)
-      .constant('bundleDirectory', 'asset:///')
+      .constant('bundleDirectory', 'rawfile:///')
       .events(['expo-file-system.downloadProgress', 'expo-file-system.uploadProgress'])
       .asyncFunction(
         'getInfoAsync',
@@ -2118,36 +2118,51 @@ function isRawUri(uri: string): boolean {
   return uri.startsWith('asset://') || uri.startsWith('rawfile://');
 }
 
-function rawPathFromUri(uri: string, allowSchemeLess: boolean = false, allowRoot: boolean = false): string {
-  let value: string;
-  if (uri.startsWith('asset://')) value = uri.slice('asset://'.length);
-  else if (uri.startsWith('rawfile://')) value = uri.slice('rawfile://'.length);
-  else if (allowSchemeLess && !uri.includes(':')) value = uri;
+function rawPathFromUri(uri: string, relative: boolean = false, root: boolean = false): string {
+  // RNOH asset:// names are literal and relative to rawfile/assets; asset:/// uses the rawfile root.
+  const metro = uri.startsWith('asset://') && !uri.startsWith('asset:///');
+  let path: string;
+
+  if (uri.startsWith('asset://')) path = uri.slice('asset://'.length);
+  else if (uri.startsWith('rawfile://')) path = uri.slice('rawfile://'.length);
+  else if (relative && !uri.includes(':')) path = uri;
   else throw new ExpoFileSystemError('ERR_FILE_SYSTEM_UNSUPPORTED_SCHEME', `Unsupported bundled URI '${uri}'`);
-  value = value.replace(/^\/+/, '').split(/[?#]/, 1)[0];
-  try {
-    value = decodeURIComponent(value);
-  } catch (_) {
-    throw new ExpoFileSystemError('ERR_FILE_SYSTEM_INVALID_RESOURCE', 'Invalid bundled resource URI');
+
+  path = path.replace(/^\/+/, '');
+
+  if (!metro) {
+    path = path.split(/[?#]/, 1)[0];
+
+    try {
+      path = decodeURIComponent(path);
+    } catch (_) {
+      throw new ExpoFileSystemError('ERR_FILE_SYSTEM_INVALID_RESOURCE', 'Invalid bundled resource URI');
+    }
   }
-  if (value.endsWith('/')) value = value.slice(0, -1);
-  if (value.includes('\0') || value.includes('\\')) {
+
+  if (path.endsWith('/')) path = path.slice(0, -1);
+
+  if (path.includes('\0') || path.includes('\\')) {
     throw new ExpoFileSystemError('ERR_FILE_SYSTEM_INVALID_RESOURCE', 'Invalid bundled resource path');
   }
-  if (value.length === 0 && allowRoot) return '';
-  const segments = value.split('/');
-  if (segments.length === 0 || segments.some((segment: string): boolean => segment.length === 0 || segment === '.' || segment === '..')) {
+  if (path.length === 0 && root) return metro ? 'assets' : '';
+
+  const parts = path.split('/');
+
+  if (parts.some((part: string): boolean => part.length === 0 || part === '.' || part === '..')) {
     throw new ExpoFileSystemError('ERR_FILE_SYSTEM_INVALID_RESOURCE', 'Invalid bundled resource path');
   }
-  return segments.join('/');
+
+  return metro ? `assets/${parts.join('/')}` : parts.join('/');
 }
 
-function toAssetUri(path: string, directory: boolean): string {
+function toRawUri(path: string, directory: boolean): string {
   const encoded = path
     .split('/')
-    .map((segment: string): string => encodeURIComponent(segment))
+    .map((part: string): string => encodeURIComponent(part))
     .join('/');
-  const uri = `asset:///${encoded}`;
+  const uri = `rawfile:///${encoded}`;
+
   return directory && !uri.endsWith('/') ? `${uri}/` : uri;
 }
 
@@ -2736,7 +2751,7 @@ function renameDirectory(owner: FileSystemDirectory, name: string): void {
 }
 
 function directoryExists(owner: FileSystemDirectory): boolean {
-  if (owner.bundled) return owner.state.rawDirectoryExists(toAssetUri(owner.rawPath(), true));
+  if (owner.bundled) return owner.state.rawDirectoryExists(toRawUri(owner.rawPath(), true));
   const path = owner.probePath();
   if (path === null || !fs.accessSync(path)) return false;
   return fs.statSync(path).isDirectory();
@@ -2754,7 +2769,7 @@ function rawDirectorySize(state: FileSystemState, uri: string): number {
 
 function directorySizeOrNull(owner: FileSystemDirectory): number | null {
   try {
-    if (owner.bundled) return rawDirectorySize(owner.state, toAssetUri(owner.rawPath(), true));
+    if (owner.bundled) return rawDirectorySize(owner.state, toRawUri(owner.rawPath(), true));
     const path = owner.probePath();
     return path === null || !fs.accessSync(path) || !fs.statSync(path).isDirectory() ? null : pathSize(path);
   } catch (_) {
@@ -2764,13 +2779,16 @@ function directorySizeOrNull(owner: FileSystemDirectory): number | null {
 
 function directoryInfo(owner: FileSystemDirectory): FileSystemInfo {
   if (!owner.bundled && fs.accessSync(owner.path())) requireDirectory(owner.path());
+
   const exists = directoryExists(owner);
   const result = new FileSystemInfo(exists);
   result.uri = owner.uri();
   result.isDirectory = exists ? true : null;
   if (!exists) return result;
-  result.files = owner.bundled ? owner.state.rawList(toAssetUri(owner.rawPath(), true)) : fs.listFileSync(owner.path());
-  result.size = owner.bundled ? rawDirectorySize(owner.state, toAssetUri(owner.rawPath(), true)) : pathSize(owner.path());
+
+  result.files = owner.bundled ? owner.state.rawList(toRawUri(owner.rawPath(), true)) : fs.listFileSync(owner.path());
+  result.size = owner.bundled ? rawDirectorySize(owner.state, toRawUri(owner.rawPath(), true)) : pathSize(owner.path());
+
   if (!owner.bundled) {
     const stat = fs.statSync(owner.path());
     result.modificationTime = stat.mtime * 1000;
@@ -2784,13 +2802,15 @@ function directoryInfo(owner: FileSystemDirectory): FileSystemInfo {
 
 function listDirectoryRecords(owner: FileSystemDirectory): DirectoryEntryRecord[] {
   if (owner.bundled) {
-    const base = toAssetUri(owner.rawPath(), true);
+    const base = toRawUri(owner.rawPath(), true);
+
     return owner.state.rawList(base).map((name: string): DirectoryEntryRecord => {
       const child = `${base}${encodeURIComponent(name)}`;
       const directory = owner.state.rawDirectoryExists(child);
       return new DirectoryEntryRecord(directory, directory ? `${child}/` : child);
     });
   }
+
   return fs.listFileSync(requireDirectory(owner.path())).map((name: string): DirectoryEntryRecord => {
     const target = joinPath(owner.path(), name);
     const directory = fs.statSync(target).isDirectory();
