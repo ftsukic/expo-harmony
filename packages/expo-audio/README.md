@@ -172,7 +172,7 @@ npm install @expo-harmony/expo-audio expo-audio@55.0.18
 
 #### `AudioPlayer.seekTo(seconds, toleranceMillisBefore?, toleranceMillisAfter?)`
 
-返回 `Promise<void>`。跳转到指定位置，单位秒，越界时钳制到 0 或总时长。两个容差参数不生效。
+返回 `Promise<void>`，在系统完成跳转后兑现。跳转到指定位置，单位秒，越界时钳制到 0 或总时长。两个容差参数不生效。
 
 #### `AudioPlayer.setPlaybackRate(rate, pitchCorrectionQuality?)`
 
@@ -302,7 +302,7 @@ npm install @expo-harmony/expo-audio expo-audio@55.0.18
 
 #### `AudioPlaylist.seekTo(seconds)`
 
-返回 `Promise<void>`，跳转到当前曲目的指定位置，单位秒。
+返回 `Promise<void>`，在系统完成跳转后兑现。跳转到当前曲目的指定位置，单位秒。
 
 #### `AudioPlaylist.add(source)`
 

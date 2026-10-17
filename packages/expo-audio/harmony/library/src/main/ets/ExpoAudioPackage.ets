@@ -61,6 +61,7 @@ const DATA_URI_BASE64_MARKER: string = ';base64';
 const FILE_URI_PREFIX: string = 'file://';
 const DUCKING_VOLUME: number = 0.5;
 const SOURCE_INITIALIZATION_TIMEOUT_MS: number = 15_000;
+const SEEK_COMPLETION_TIMEOUT_MS: number = 15_000;
 const FILE_CLOSE_ATTEMPTS: number = 3;
 const MAX_DATA_URI_PAYLOAD_BYTES: number = 32 * 1024 * 1024;
 let sequence: number = 0;
@@ -799,6 +800,60 @@ async function waitForSourceInitialization(player: media.AVPlayer): Promise<void
   }
 }
 
+async function seekAndWait(player: media.AVPlayer, position: number): Promise<void> {
+  let finish: (error?: ExpoAudioError) => void = (): void => {};
+  let failure: ExpoAudioError | undefined;
+  let settled = false;
+  const complete = new Promise<void>((resolve: () => void): void => {
+    finish = (error?: ExpoAudioError): void => {
+      if (settled) return;
+
+      settled = true;
+      failure = error;
+      resolve();
+    };
+  });
+
+  const onSeekDone = (time: number): void => {
+    if (time === position) finish();
+  };
+  const onError = (error: BusinessError): void => finish(new ExpoAudioError('ERR_AUDIO_SEEK', cleanError(error)));
+  const onState = (state: media.AVPlayerState, _: media.StateChangeReason): void => {
+    if (state === 'error' || state === 'released') {
+      finish(new ExpoAudioError('ERR_AUDIO_SEEK', `HarmonyOS AVPlayer entered the ${state} state while seeking.`));
+    }
+  };
+  let timer = -1;
+
+  try {
+    player.on('seekDone', onSeekDone);
+    player.on('error', onError);
+    player.on('stateChange', onState);
+
+    timer = setTimeout((): void => {
+      finish(new ExpoAudioError('ERR_AUDIO_SEEK_TIMEOUT', `HarmonyOS AVPlayer did not finish seeking within ${SEEK_COMPLETION_TIMEOUT_MS} ms.`));
+    }, SEEK_COMPLETION_TIMEOUT_MS);
+
+    player.seek(position, media.SeekMode.SEEK_CLOSEST);
+
+    await complete;
+
+    if (failure !== undefined) throw new ExpoAudioError(failure.code, failure.message);
+  } finally {
+    if (timer >= 0) clearTimeout(timer);
+
+    try {
+      player.off('seekDone', onSeekDone);
+    } catch (_) {}
+    try {
+      player.off('error', onError);
+    } catch (_) {}
+    try {
+      player.off('stateChange', onState);
+    } catch (_) {}
+  }
+}
+
 function publicPlaybackState(state: media.AVPlayerState, buffering: boolean): string {
   if (buffering) return 'buffering';
   if (state === 'prepared' || state === 'playing' || state === 'paused') return 'ready';
@@ -892,6 +947,7 @@ abstract class PlaybackController extends OperationQueue {
   protected duckedValue: boolean = false;
   private backgroundSuspended: boolean = false;
   private interruptionSuspended: boolean = false;
+  private seekWaiter?: (error?: ExpoAudioError, time?: number) => void;
   private readonly updateIntervalMs: number;
   private readonly preferredBufferDuration: number;
 
@@ -1011,7 +1067,7 @@ abstract class PlaybackController extends OperationQueue {
   }
 
   refreshAudioRendererUsage(): void {
-    this.schedule('replace source', async (): Promise<void> => this.replacePlayer(this.source, this.intendedPlaying));
+    this.schedule('replace source', async (): Promise<void> => this.replacePlayer(this.source, this.intendedPlaying, true));
   }
 
   async seekTo(seconds: number): Promise<void> {
@@ -1027,20 +1083,23 @@ abstract class PlaybackController extends OperationQueue {
   play(): void {
     this.backgroundSuspended = false;
     this.interruptionSuspended = false;
-    const wasPlaying = this.playing;
+    const playing = this.playing;
     this.intendedPlaying = true;
 
-    if (wasPlaying !== this.playing) this.delegate.playbackStateChanged(this);
+    if (playing !== this.playing) this.delegate.playbackStateChanged(this);
     this.emitStatus();
 
     this.schedule('play', async (): Promise<void> => {
       if (!(await this.delegate.beforePlay())) {
         this.intendedPlaying = false;
+
         return;
       }
 
       const player = this.requirePreparedPlayer('play');
-      if (player.state === 'completed') player.seek(0, media.SeekMode.SEEK_CLOSEST);
+
+      if (player.state === 'completed' || this.state === 'completed') await this.seekAttachedPlayerAndWait(player, 0);
+      if (this.destroyed || !this.intendedPlaying) return;
 
       await player.play();
     });
@@ -1127,6 +1186,7 @@ abstract class PlaybackController extends OperationQueue {
     if (this.destroyed) return;
 
     this.destroyed = true;
+    this.seekWaiter?.(new ExpoAudioError('ERR_AUDIO_PLAYER_RELEASED', 'The audio object was released while seeking.'));
     this.cancelSuspensions();
     this.observedEvents.clear();
     this.stopStatusTimer();
@@ -1134,6 +1194,7 @@ abstract class PlaybackController extends OperationQueue {
     this.schedule('release', async (): Promise<void> => {
       const player = this.player;
       const file = this.sourceFile;
+
       this.player = undefined;
       this.sourceFile = undefined;
 
@@ -1162,12 +1223,15 @@ abstract class PlaybackController extends OperationQueue {
     this.dispatcher.emit(this.statusEventName(), this.statusPayload(finished));
   }
 
-  protected async replacePlayer(source: AudioSource | null, resume: boolean): Promise<void> {
+  protected async replacePlayer(source: AudioSource | null, resume: boolean, preserve: boolean = false): Promise<void> {
     if (this.destroyed) return;
 
+    this.refreshPosition();
     const previous = this.player;
     const previousFile = this.sourceFile;
-    const wasPlaying = this.playing;
+    const playing = this.playing;
+    const position = preserve ? this.currentTimeMs : 0;
+    const completed = preserve && this.state === 'completed';
 
     this.player = undefined;
     this.sourceFile = undefined;
@@ -1176,11 +1240,11 @@ abstract class PlaybackController extends OperationQueue {
     this.loadedValue = false;
     this.bufferingValue = source !== null;
     this.playingValue = false;
-    this.currentTimeMs = 0;
+    this.currentTimeMs = position;
     this.durationMs = 0;
     this.didJustFinish = false;
 
-    if (wasPlaying !== this.playing) this.delegate.playbackStateChanged(this);
+    if (playing !== this.playing) this.delegate.playbackStateChanged(this);
     this.emitStatus();
 
     if (previous !== undefined && previous.state === 'playing') {
@@ -1193,6 +1257,7 @@ abstract class PlaybackController extends OperationQueue {
 
     let next: media.AVPlayer | undefined;
     let nextFile: SourceFile | undefined;
+
     try {
       if (source === null || source.uri === undefined || source.uri.length === 0) {
         next = await media.createAVPlayer();
@@ -1215,19 +1280,28 @@ abstract class PlaybackController extends OperationQueue {
             usage: this.delegate.playbackUsage(),
             rendererFlags: 0,
           };
+
           await next.prepare();
         }
       }
 
+      const duration = this.safeDuration(next);
+
+      // Live streams may have no seekable timeline.
+      if (preserve && position > 0 && duration > 0 && this.isPreparedState(next.state)) {
+        await seekAndWait(next, seekTargetMilliseconds(position / 1000, duration));
+      }
+
       if (this.destroyed) {
         await this.releasePlayer(next, nextFile);
+
         return;
       }
 
       this.player = next;
       this.sourceFile = nextFile;
       this.attachPlayerCallbacks(next);
-      this.state = next.state;
+      this.state = completed ? 'completed' : next.state;
       this.loadedValue = this.isPreparedState(next.state);
       this.bufferingValue = false;
       this.durationMs = this.safeDuration(next);
@@ -1263,10 +1337,40 @@ abstract class PlaybackController extends OperationQueue {
     const length = this.safeDuration(player);
     const target = seekTargetMilliseconds(seconds, length);
 
-    player.seek(target, media.SeekMode.SEEK_CLOSEST);
-    this.currentTimeMs = target;
+    await this.seekAttachedPlayerAndWait(player, target);
+  }
 
-    this.emitStatus();
+  private async seekAttachedPlayerAndWait(player: media.AVPlayer, position: number): Promise<void> {
+    let finish: (error?: ExpoAudioError, time?: number) => void = (): void => {};
+    let failure: ExpoAudioError | undefined;
+    let settled = false;
+    const complete = new Promise<void>((resolve: () => void): void => {
+      finish = (error?: ExpoAudioError, time?: number): void => {
+        if (settled || (error === undefined && time !== position)) return;
+
+        settled = true;
+        failure = error;
+        resolve();
+      };
+    });
+
+    // AVPlayer keeps one listener per event, so attached seeks use the permanent callbacks.
+    this.seekWaiter = finish;
+
+    const timer = setTimeout((): void => {
+      finish(new ExpoAudioError('ERR_AUDIO_SEEK_TIMEOUT', `HarmonyOS AVPlayer did not finish seeking within ${SEEK_COMPLETION_TIMEOUT_MS} ms.`));
+    }, SEEK_COMPLETION_TIMEOUT_MS);
+
+    try {
+      player.seek(position, media.SeekMode.SEEK_CLOSEST);
+
+      await complete;
+
+      if (failure !== undefined) throw new ExpoAudioError(failure.code, failure.message);
+    } finally {
+      clearTimeout(timer);
+      if (this.seekWaiter === finish) this.seekWaiter = undefined;
+    }
   }
 
   protected onScheduledError(label: string, error: Object): void {
@@ -1325,7 +1429,9 @@ abstract class PlaybackController extends OperationQueue {
     }
     target.on('stateChange', (state: media.AVPlayerState, _: media.StateChangeReason): void => {
       if (this.destroyed || this.player !== target) return;
+
       if (state === 'error' || state === 'released') {
+        this.seekWaiter?.(new ExpoAudioError('ERR_AUDIO_SEEK', `HarmonyOS AVPlayer entered the ${state} state while seeking.`));
         this.onScheduledError('player state', new ExpoAudioError('ERR_AUDIO_PLAYER_STATE', `HarmonyOS AVPlayer entered the ${state} state.`));
         return;
       }
@@ -1378,7 +1484,10 @@ abstract class PlaybackController extends OperationQueue {
     });
     target.on('seekDone', (time: number): void => {
       if (this.player !== target) return;
+
       this.currentTimeMs = Math.max(0, time);
+      this.seekWaiter?.(undefined, time);
+
       this.emitStatus();
     });
     target.on('audioOutputDeviceChangeWithInfo', (info: audio.AudioStreamDeviceChangeInfo): void => {
@@ -1389,6 +1498,8 @@ abstract class PlaybackController extends OperationQueue {
     });
     target.on('error', (error: BusinessError): void => {
       if (this.player !== target) return;
+
+      this.seekWaiter?.(new ExpoAudioError('ERR_AUDIO_SEEK', cleanError(error)));
       this.onScheduledError('player callback', error);
     });
   }
@@ -2774,8 +2885,8 @@ class ExpoAudioRuntime implements PlaybackDelegate, RecorderDelegate {
       allowsBackgroundRecording: input.allowsBackgroundRecording ?? this.mode.allowsBackgroundRecording,
       interruptionMode: input.interruptionMode ?? this.mode.interruptionMode,
     };
-    const nextInterruptionMode: InterruptionMode = normalizeInterruptionMode(next.interruptionMode ?? 'mixWithOthers');
-    const routeChanged: boolean = next.shouldRouteThroughEarpiece !== this.mode.shouldRouteThroughEarpiece;
+    const interruption: InterruptionMode = normalizeInterruptionMode(next.interruptionMode ?? 'mixWithOthers');
+    const routeChanged: boolean = (next.shouldRouteThroughEarpiece === true) !== (this.mode.shouldRouteThroughEarpiece === true);
 
     if (deviceInfo.sdkApiVersion >= 20) {
       const earpiece = next.shouldRouteThroughEarpiece === true;
@@ -2804,7 +2915,7 @@ class ExpoAudioRuntime implements PlaybackDelegate, RecorderDelegate {
     }
 
     this.mode = next;
-    this.interruptionMode = nextInterruptionMode;
+    this.interruptionMode = interruption;
 
     if (routeChanged) {
       await this.clearAllPreloaded();
