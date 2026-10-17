@@ -2,6 +2,7 @@ import { ExpoModuleError } from '@expo-harmony/expo-modules-core';
 import { dataSharePredicates } from '@kit.ArkData';
 import { photoAccessHelper } from '@kit.MediaLibraryKit';
 import { effectiveCreationTime, memberNumber } from './MediaLibraryAssets';
+import { MediaLibraryPaging } from './MediaLibraryPaging';
 
 const MEDIA_TYPE_AUDIO: string = 'audio';
 const MEDIA_TYPE_PHOTO: string = 'photo';
@@ -253,13 +254,22 @@ function sortColumn(key: string): string {
   throw new ExpoModuleError('ERR_MEDIA_LIBRARY_INVALID_SORT', `Unsupported Expo media sort key '${key}'.`);
 }
 
-export async function cursorStart(fetch: photoAccessHelper.FetchResult<photoAccessHelper.PhotoAsset>, after: string | undefined): Promise<number> {
-  if (after === undefined) return 0;
+export async function cursorStart(
+  fetch: photoAccessHelper.FetchResult<photoAccessHelper.PhotoAsset>,
+  after: string | undefined,
+  query: string,
+  paging: MediaLibraryPaging,
+  locate?: (uri: string) => Promise<number>,
+): Promise<number> {
+  const start = await paging.start(
+    query,
+    after,
+    fetch.getCount(),
+    async (position: number): Promise<string> => (await fetch.getObjectByPosition(position)).uri,
+    locate,
+  );
 
-  const count = fetch.getCount();
-  for (let i = 0; i < count; i += 1) {
-    if ((await fetch.getObjectByPosition(i)).uri === after) return i + 1;
-  }
+  if (start >= 0) return start;
 
   throw new ExpoModuleError('ERR_MEDIA_LIBRARY_INVALID_CURSOR', `The pagination cursor '${after}' is not present in this media query.`);
 }

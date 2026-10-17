@@ -9,7 +9,7 @@ import {
   ExpoValueTypes,
 } from '@expo-harmony/expo-modules-core';
 import { dataSharePredicates, uniformTypeDescriptor } from '@kit.ArkData';
-import { BusinessError } from '@kit.BasicServicesKit';
+import { BusinessError, deviceInfo } from '@kit.BasicServicesKit';
 import { fileIo, fileUri } from '@kit.CoreFileKit';
 import { photoAccessHelper } from '@kit.MediaLibraryKit';
 import { AlbumRecord, AssetRecord, ASSET_FETCH_COLUMNS, mapAsset, MediaLibraryChangeEvent, PagedAssetResult } from './MediaLibraryAssets';
@@ -29,10 +29,12 @@ import {
   optionalRecord,
 } from './MediaLibraryQuery';
 import { MediaLibraryPermissionResponse, MediaLibraryPermissions, READ_PERMISSION, WRITE_PERMISSION } from './MediaLibraryPermissions';
+import { queryIdentity, MediaLibraryPaging } from './MediaLibraryPaging';
 
 const CHANGE_EVENT_NAME: string = 'mediaLibraryDidChange';
 // The public deleteAssets API accepts at most 300 URIs per system confirmation.
 const DELETE_BATCH_LIMIT: number = 300;
+const FETCH_RESULT_INDEX_API: number = 23;
 const ASSET_OPTIONS = ExpoValueTypes.custom<AssetQueryOptions>('AssetsOptions', readAssetQueryOptions, (value: AssetQueryOptions): ESObject => value);
 const ALBUM_OPTIONS = ExpoValueTypes.custom<AlbumQueryOptions>('AlbumsOptions', readAlbumQueryOptions, (value: AlbumQueryOptions): ESObject => value);
 const INFO_OPTIONS = ExpoValueTypes.custom<Record<string, ESObject>>(
@@ -53,6 +55,7 @@ interface LocalMediaSource {
 
 export class ExpoMediaLibraryModule extends ExpoModule {
   private readonly permissions: MediaLibraryPermissions;
+  private readonly paging: MediaLibraryPaging = new MediaLibraryPaging();
   private library?: photoAccessHelper.PhotoAccessHelper;
   private observing: boolean = false;
   private registered: boolean = false;
@@ -315,6 +318,7 @@ export class ExpoMediaLibraryModule extends ExpoModule {
     if (this.release !== undefined) return this.release;
 
     this.destroyed = true;
+    this.paging.destroy();
     this.permissions.destroy();
     this.observing = false;
     this.stopSystemObservation();
@@ -401,17 +405,31 @@ export class ExpoMediaLibraryModule extends ExpoModule {
     try {
       const items = await materializedAssets(fetch, options, sorts, materialize);
 
+      const identity = queryIdentity(options.album, options.sortBy, options.mediaType, options.createdAfter, options.createdBefore);
+      const locate =
+        deviceInfo.sdkApiVersion >= FETCH_RESULT_INDEX_API
+          ? async (uri: string): Promise<number> => {
+              const asset = await this.findAsset(uri);
+
+              return asset === undefined ? -1 : await fetch.getIndex(asset);
+            }
+          : undefined;
+
       const total = items === undefined ? fetch.getCount() : items.length;
-      const start = items === undefined ? await cursorStart(fetch, options.after) : cursorStartInAssets(items, options.after);
+      const start =
+        items === undefined ? await cursorStart(fetch, options.after, identity, this.paging, locate) : cursorStartInAssets(items, options.after);
       const end = Math.min(start + options.first, total);
 
       const assets: AssetRecord[] = [];
       for (let i = start; i < end; i += 1) {
         const asset = items === undefined ? await fetch.getObjectByPosition(i) : items[i];
+
         assets.push(await mapAsset(asset, options.resolveWithFullInfo));
       }
 
       const cursor = assets.length > 0 ? assets[assets.length - 1].id : (options.after ?? null);
+
+      if (items === undefined && assets.length > 0) this.paging.remember(identity, assets[assets.length - 1].id, end - 1);
 
       return new PagedAssetResult(assets, cursor, end < total, total);
     } finally {
