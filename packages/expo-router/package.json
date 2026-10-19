@@ -21,13 +21,13 @@
   "types": "index.d.ts",
   "dependencies": {
     "@expo-harmony/expo-linking": "workspace:*",
-    "@react-native-ohos/react-native-safe-area-context": "5.6.3",
+    "@react-native-ohos/react-native-safe-area-context": "5.6.4",
     "@react-native-ohos/react-native-screens": "https://raw.atomgit.com/baoshuo/rntpc_react-native-screens/blobs/4d7ff55b0d27067d85388e6fbe2074c7df7e49df/react-native-ohos-react-native-screens-4.26.2-rnoh084.0.tgz"
   },
   "peerDependencies": {
-    "@react-native-ohos/react-native-gesture-handler": "2.30.1",
-    "@react-native-ohos/react-native-reanimated": "4.0.2-beta.1",
-    "@react-native-ohos/react-native-worklets": "1.0.0",
+    "@react-native-ohos/react-native-gesture-handler": "2.30.2",
+    "@react-native-ohos/react-native-reanimated": "4.0.2",
+    "@react-native-ohos/react-native-worklets": "1.0.1",
     "expo-router": "55.0.18"
   },
   "devDependencies": {
@@ -50,7 +50,7 @@
   "harmony": {
     "modules": {
       "@react-native-ohos/react-native-gesture-handler": {
-        "version": "2.30.1",
+        "version": "2.30.2",
         "mainHarPath": "harmony",
         "ohPackageName": "@react-native-ohos/react-native-gesture-handler",
         "etsPackageClassName": "RnohReactNativeHarmonyGestureHandlerPackage",
@@ -58,7 +58,7 @@
         "cmakeLibraryTargetName": "rnoh_gesture_handler"
       },
       "@react-native-ohos/react-native-reanimated": {
-        "version": "4.0.2-beta.1",
+        "version": "4.0.2",
         "mainHarPath": "harmony",
         "ohPackageName": "@react-native-ohos/react-native-reanimated",
         "etsPackageClassName": "ReanimatedPackage",
@@ -67,7 +67,7 @@
         "cmakeLibraryTargetName": "rnoh_reanimated"
       },
       "@react-native-ohos/react-native-safe-area-context": {
-        "version": "5.6.3",
+        "version": "5.6.4",
         "mainHarPath": "harmony",
         "ohPackageName": "@react-native-ohos/react-native-safe-area-context",
         "etsPackageClassName": "SafeAreaViewPackage",
@@ -90,7 +90,7 @@
         "cmakeLibraryTargetName": "rnoh_screens"
       },
       "@react-native-ohos/react-native-worklets": {
-        "version": "1.0.0",
+        "version": "1.0.1",
         "mainHarPath": "harmony",
         "ohPackageName": "@react-native-ohos/react-native-worklets",
         "etsPackageClassName": "ReanimatedWorkletPackage",
