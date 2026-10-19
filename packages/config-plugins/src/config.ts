@@ -3,14 +3,8 @@ import type { ExpoConfig } from '@expo/config-types';
 export type HarmonyPlatform = 'harmony';
 export type ExpoKnownPlatform = NonNullable<ExpoConfig['platforms']>[number];
 export type ExpoHarmonyPlatform = ExpoKnownPlatform | HarmonyPlatform;
-export type HarmonyDeviceType = 'phone' | 'tablet' | '2in1';
-export type HarmonyOrientation
-  = | 'default'
-    | 'portrait'
-    | 'landscape'
-    | 'portrait_inverted'
-    | 'landscape_inverted'
-    | 'auto_rotation';
+export type HarmonyDeviceType = string;
+export type HarmonyOrientation = string;
 
 export interface HarmonyPermission {
   name: string;

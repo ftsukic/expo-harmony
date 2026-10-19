@@ -41,11 +41,6 @@ export function parseHarmonySdkVersion(value: unknown, field = 'SDK version'): H
 
   if (label && Number(label[1]) < 26) {
     const api = Number(label[1]);
-    const known = Labels.get(api);
-
-    if (known && known !== version) {
-      throw new HarmonyConfigPluginError('ERR_HARMONY_CONFIG_INVALID', `${field}: API ${api} uses SDK label ${known}.`);
-    }
 
     return { api, native: version };
   }

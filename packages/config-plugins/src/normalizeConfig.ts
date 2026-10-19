@@ -7,7 +7,7 @@ import type {
 } from './config';
 import { HarmonyConfigPluginError } from './errors';
 import { toArgb } from './resources';
-import { compareHarmonyApiVersions, parseHarmonySdkVersion } from './sdkVersion';
+import { parseHarmonySdkVersion } from './sdkVersion';
 
 type HarmonyExpoConfig = ExpoConfigWithHarmony;
 
@@ -38,16 +38,8 @@ interface NormalizedHarmonyConfig {
 const BundlePattern = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*){2,}$/;
 const IdentifierPattern = /^[A-Za-z][A-Za-z0-9_]*$/;
 const ColorPattern = /^(#[0-9A-Fa-f]{6}|#[0-9A-Fa-f]{8})$/;
-const Orientations = new Set([
-  'default',
-  'portrait',
-  'landscape',
-  'portrait_inverted',
-  'landscape_inverted',
-  'auto_rotation',
-]);
-const DeviceTypes = new Set<HarmonyDeviceType>(['phone', 'tablet', '2in1']);
-const MinimumApi = 20;
+// ponytail: Hvigor and native dependencies determine supported SDK, ABI, device, and orientation values.
+const DefaultCompatibleApi = 20;
 const TargetApi = 24;
 
 class HarmonyConfigError extends HarmonyConfigPluginError {
@@ -55,16 +47,6 @@ class HarmonyConfigError extends HarmonyConfigPluginError {
     super('ERR_HARMONY_CONFIG_INVALID', message, { operation: 'normalize-config' });
     this.name = 'HarmonyConfigError';
   }
-}
-
-function readPositiveInteger(value: unknown, field: string, fallback: number): number {
-  const result = value === undefined ? fallback : value;
-
-  if (typeof result !== 'number' || !Number.isSafeInteger(result) || result <= 0) {
-    throw new HarmonyConfigError(`harmony.${field} must be a positive integer.`);
-  }
-
-  return result as number;
 }
 
 function readString(value: unknown, field: string, fallback?: string): string {
@@ -90,22 +72,18 @@ function normalizeColor(value: unknown, field: string, fallback: string): string
   return toArgb(color);
 }
 
-function normalizeStringArray<T extends string = string>(
-  value: unknown,
-  field: string,
-  allowed?: ReadonlySet<T>
-): T[] {
-  if (!Array.isArray(value) || value.length === 0) {
-    throw new HarmonyConfigError(`${field} must be a non-empty array.`);
+function normalizeStringArray(value: unknown, field: string): string[] {
+  if (!Array.isArray(value)) {
+    throw new HarmonyConfigError(`${field} must be an array.`);
   }
 
-  const result: T[] = [];
+  const result: string[] = [];
   for (const item of value) {
-    if (typeof item !== 'string' || !item || (allowed && !allowed.has(item as T))) {
+    if (typeof item !== 'string' || !item) {
       throw new HarmonyConfigError(`Invalid ${field} entry: ${item}`);
     }
 
-    if (!result.includes(item as T)) result.push(item as T);
+    if (!result.includes(item)) result.push(item);
   }
 
   return result;
@@ -117,10 +95,6 @@ export function normalizePermission(permission: HarmonyPermission) {
   }
 
   const name = readString(permission.name, 'harmony.permissions[].name');
-
-  if (!/^ohos\.permission\.[A-Z0-9_]+$/.test(name)) {
-    throw new HarmonyConfigError(`Invalid Harmony permission: ${name}`);
-  }
 
   const result: {
     name: string;
@@ -226,33 +200,14 @@ function normalizeHarmonyConfig(config: HarmonyExpoConfig): NormalizedHarmonyCon
   }
 
   const version = readString(harmony.versionName, 'harmony.versionName', config.version || '1.0.0');
-  const code = readPositiveInteger(harmony.versionCode, 'versionCode', 1);
+  const code = harmony.versionCode ?? 1;
 
   const target = parseHarmonySdkVersion(
     harmony.targetSdkVersion ?? harmony.targetApiVersion ?? TargetApi, 'harmony.targetSdkVersion'
   );
 
-  if (harmony.targetApiVersion !== undefined) {
-    const alias = parseHarmonySdkVersion(harmony.targetApiVersion, 'harmony.targetApiVersion');
-
-    if (compareHarmonyApiVersions(alias.api, target.api) !== 0) {
-      throw new HarmonyConfigError('harmony.targetApiVersion conflicts with harmony.targetSdkVersion.');
-    }
-  }
-
-  const compatible = parseHarmonySdkVersion(harmony.compatibleSdkVersion ?? MinimumApi, 'harmony.compatibleSdkVersion');
-
-  if (compareHarmonyApiVersions(compatible.api, MinimumApi) < 0) {
-    throw new HarmonyConfigError(`Harmony compatible API must be ${MinimumApi} or newer.`);
-  }
-  if (compareHarmonyApiVersions(compatible.api, target.api) > 0) {
-    throw new HarmonyConfigError('Harmony compatibleSdkVersion cannot exceed targetSdkVersion.');
-  }
-
-  const orientation = harmony.orientation || config.orientation || 'default';
-  if (!Orientations.has(orientation)) {
-    throw new HarmonyConfigError(`Unsupported Harmony orientation: ${orientation}`);
-  }
+  const compatible = parseHarmonySdkVersion(harmony.compatibleSdkVersion ?? DefaultCompatibleApi, 'harmony.compatibleSdkVersion');
+  const orientation = readString(harmony.orientation ?? config.orientation, 'harmony.orientation', 'default');
 
   const background = normalizeColor(
     harmony.backgroundColor || config.backgroundColor,
@@ -268,12 +223,6 @@ function normalizeHarmonyConfig(config: HarmonyExpoConfig): NormalizedHarmonyCon
   const abis = harmony.abiFilters === undefined
     ? ['arm64-v8a', 'x86_64']
     : normalizeStringArray(harmony.abiFilters, 'harmony.abiFilters');
-
-  for (const abi of abis) {
-    if (!['arm64-v8a', 'x86_64'].includes(abi)) {
-      throw new HarmonyConfigError(`Invalid Harmony ABI filter: ${abi}`);
-    }
-  }
 
   const permissions = (harmony.permissions || []).map(normalizePermission);
 
@@ -315,11 +264,7 @@ function normalizeHarmonyConfig(config: HarmonyExpoConfig): NormalizedHarmonyCon
     : readString(harmony.signingConfigFile, 'harmony.signingConfigFile');
   const devices: HarmonyDeviceType[] = harmony.deviceTypes === undefined
     ? ['phone', 'tablet']
-    : normalizeStringArray<HarmonyDeviceType>(
-        harmony.deviceTypes,
-        'harmony.deviceTypes',
-        DeviceTypes
-      );
+    : normalizeStringArray(harmony.deviceTypes, 'harmony.deviceTypes');
 
   const moduleBuilds = harmony.moduleBuilds;
   if (moduleBuilds !== undefined) {
