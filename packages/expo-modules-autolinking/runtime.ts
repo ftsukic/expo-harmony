@@ -23,7 +23,7 @@ export interface HarmonyRuntimeContract {
   modules: HarmonyNativeModule[];
   config: {
     nativeCompiler: string;
-    targetApiVersion: number | string;
+    targetApiVersion?: number | string;
     compatibleApiVersion: number | string;
     nativeLibFilterHash?: string;
     permissions: string[];
@@ -53,34 +53,20 @@ function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-function token(value: unknown): value is string {
-  return typeof value === 'string' && /^[A-Za-z0-9@][A-Za-z0-9@._+:()/-]{0,199}$/.test(value)
-    && !value.includes('://') && !value.includes('..') && !/^[A-Za-z]:/.test(value);
+function nonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0;
 }
 
 function strings(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every(token) && new Set(value).size === value.length;
+  return Array.isArray(value) && value.every(nonEmptyString) && new Set(value).size === value.length;
 }
 
 const Versions = ['runtimeVersion', 'expo', 'expoModulesCore', 'rnoh', 'react', 'hermes'] as const;
 const Settings = ['permissions', 'querySchemes', 'backgroundModes', 'abiFilters'] as const;
 
-function apiVersion(value: unknown, schema: unknown): number[] | undefined {
-  if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 13 && value < 26) return [value, 0, 0];
-  if (schema === 2 && typeof value === 'string' && /^(?:[1-9]\d{1,2})\.(?:0|[1-9]\d{0,2})\.(?:0|[1-9]\d{0,2})$/.test(value)) {
-    const parts = value.split('.').map(Number);
-    if (parts[0] >= 26) return parts;
-  }
-
-  return undefined;
-}
-
-function compareApiVersions(left: number[], right: number[]): number {
-  for (let index = 0; index < 3; index++) {
-    if (left[index] !== right[index]) return left[index] - right[index];
-  }
-
-  return 0;
+function apiVersion(value: unknown, schema: unknown): boolean {
+  return (typeof value === 'number' && Number.isSafeInteger(value) && value > 0)
+    || (schema === 2 && typeof value === 'string' && /^\d+\.\d+\.\d+$/.test(value));
 }
 
 export function harmonyRuntimeSchemaVersion(config: HarmonyRuntimeContract['config']): 1 | 2 {
@@ -109,7 +95,7 @@ export function validateHarmonyRuntime(value: unknown): HarmonyCompatibilityIssu
   }
 
   for (const field of Versions) {
-    if (field === 'runtimeVersion' ? typeof value[field] !== 'string' || !value[field] : !token(value[field])) {
+    if (!nonEmptyString(value[field])) {
       issues.push({ code: 'INVALID_CONTRACT', field, message: `${field} must be an explicit version.` });
     }
   }
@@ -119,7 +105,7 @@ export function validateHarmonyRuntime(value: unknown): HarmonyCompatibilityIssu
   } else {
     const names = new Set<string>();
     for (const module of value.modules) {
-      if (!record(module) || !token(module.packageName) || !token(module.packageVersion)
+      if (!record(module) || !nonEmptyString(module.packageName) || !nonEmptyString(module.packageVersion)
         || !strings(module.modules) || !strings(module.services) || !strings(module.registrations)
         || !strings(module.artifacts) || module.artifacts.some(hash => !/^[a-f0-9]{64}$/.test(hash))
         || names.has(module.packageName)) {
@@ -131,14 +117,14 @@ export function validateHarmonyRuntime(value: unknown): HarmonyCompatibilityIssu
   }
 
   const config = value.config;
-  const target = record(config) ? apiVersion(config.targetApiVersion, value.schemaVersion) : undefined;
+  const target = record(config)
+    && (config.targetApiVersion === undefined || apiVersion(config.targetApiVersion, value.schemaVersion));
   const compatible = record(config) ? apiVersion(config.compatibleApiVersion, value.schemaVersion) : undefined;
 
-  if (!record(config) || !token(config.nativeCompiler) || !Settings.every(field => strings(config[field]))
-    || !target || !compatible || compareApiVersions(compatible, target) > 0
+  if (!record(config) || !nonEmptyString(config.nativeCompiler) || !Settings.every(field => strings(config[field]))
+    || !target || !compatible
     || (config.nativeLibFilterHash !== undefined && (value.schemaVersion !== 2
-      || typeof config.nativeLibFilterHash !== 'string' || !/^[a-f0-9]{64}$/.test(config.nativeLibFilterHash)))
-    || (Array.isArray(config.abiFilters) && config.abiFilters.length === 0)) {
+      || typeof config.nativeLibFilterHash !== 'string' || !/^[a-f0-9]{64}$/.test(config.nativeLibFilterHash)))) {
     issues.push({ code: 'INVALID_CONTRACT', field: 'config', message: 'Invalid native build configuration.' });
   }
 
@@ -184,6 +170,8 @@ export function checkHarmonyCompatibility(client: unknown, requirements: unknown
   }
 
   for (const field of ['nativeCompiler', 'targetApiVersion', 'compatibleApiVersion', 'nativeLibFilterHash'] as const) {
+    // Hvigor chooses the target SDK when neither targetSdkVersion nor compileSdkVersion is explicit.
+    if (field === 'targetApiVersion' && (available.config[field] === undefined || required.config[field] === undefined)) continue;
     if (available.config[field] !== required.config[field]) {
       issues.push({ code: 'CONFIG_MISMATCH', field, message: `${field}: project requires ${required.config[field]}, client provides ${available.config[field]}.` });
     }

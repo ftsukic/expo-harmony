@@ -203,8 +203,8 @@ export async function buildConfiguredModulesAsync(
 
       const settings = options.moduleBuildSettings;
       if (settings) {
-        if (!Array.isArray(settings.abiFilters) || settings.abiFilters.length === 0
-          || settings.abiFilters.some(abi => !['arm64-v8a', 'x86_64'].includes(abi))
+        if (!Array.isArray(settings.abiFilters)
+          || settings.abiFilters.some(abi => typeof abi !== 'string' || !abi)
           || ![settings.compatibleSdkVersion, settings.targetSdkVersion].every(value => typeof value === 'string' && value.length > 0)) {
           throw new HarmonyAutolinkingError('INVALID_OPTIONS', 'Invalid moduleBuildSettings; run Harmony prebuild again.', {
             stage: 'configured-module-build',
