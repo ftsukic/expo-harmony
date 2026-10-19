@@ -52,8 +52,8 @@ npx expo-harmony prebuild
 | --- | --- | --- |
 | `compatibleSdkVersion` | 最低兼容 SDK 版本，接受 API 数字或 SDK 版本字符串 | `20` |
 | `targetSdkVersion` | 目标 SDK 版本，接受 API 数字或 SDK 版本字符串 | `24` |
-| `abiFilters` | CPU 架构数组，支持 `arm64-v8a` 和 `x86_64`，不能为空 | `["arm64-v8a", "x86_64"]` |
-| `nativeCompiler` | 原生编译器，可选 `BiSheng` 或 `Original` | `"BiSheng"` |
+| `abiFilters` | CPU 架构字符串数组，支持范围由原生工具链决定 | `["arm64-v8a", "x86_64"]` |
+| `nativeCompiler` | 原生编译器名称，由原生工具链解析 | `"BiSheng"` |
 | `nativeLib.filter` | SO 筛选与冲突处理规则，见下文 | 不设置 |
 | `compressNativeLibs` | 是否压缩包内的 SO，类型为 `boolean` | 平台默认值 `false` |
 | `extractNativeLibs` | 安装时是否解压 SO，类型为 `boolean` | 平台默认值 `true` |
@@ -62,9 +62,9 @@ npx expo-harmony prebuild
 
 ### SDK 版本
 
-`compatibleSdkVersion` 不得低于 API 20，也不能高于 `targetSdkVersion`。最低兼容版本还需满足应用所用原生依赖的要求，插件不会自动提高该值。
+SDK 版本的兼容性由原生工具链和应用使用的原生依赖决定。插件不强制最低 API 版本，也不会自动提高配置的值。
 
-API 20、21、23、24 可用数字表示，也可使用完整的 SDK 版本字符串。例如，`24` 与 `"6.1.1(24)"` 表示同一版本。API 26 之前的其他版本需填写带 API 级别的完整 SDK 版本字符串。
+API 13、14、20、21、23、24 可用数字表示，也可使用完整的 SDK 版本字符串。例如，`24` 与 `"6.1.1(24)"` 表示同一版本。API 26 之前的其他版本需填写带 API 级别的完整 SDK 版本字符串。
 
 API 26 起使用 `"26.0.0"` 这样的版本字符串，数字 `26` 等同于 `"26.0.0"`。指定次版本时填写完整版本，例如 `"26.1.0"`。
 
@@ -83,7 +83,7 @@ API 26 起使用 `"26.0.0"` 这样的版本字符串，数字 `26` 等同于 `"2
 | `pickLasts` | `string[]` |
 | `enableOverride` | `boolean` |
 
-筛选规则遵循 [Hvigor 的 SO 配置](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/ide-hvigor-cpp)，匹配模式可写为 `"**/libexample.so"`。同一模式不能同时出现在 `pickFirsts` 和 `pickLasts` 中。
+筛选规则遵循 [Hvigor 的 SO 配置](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/ide-hvigor-cpp)，匹配模式可写为 `"**/libexample.so"`。
 
 ### SO 符号
 
@@ -102,7 +102,7 @@ API 26 起使用 `"26.0.0"` 这样的版本字符串，数字 `26` 等同于 `"2
 }
 ```
 
-`strip` 必填，`exclude` 可省略。`strip: true` 时，`exclude` 中的匹配项保留符号；`strip: false` 时，仅剥离 `exclude` 中匹配项的符号。
+`strip` 和 `exclude` 均可省略，缺省值由 Hvigor 决定。`strip: true` 时，`exclude` 中的匹配项保留符号；`strip: false` 时，仅剥离 `exclude` 中匹配项的符号。其他原生符号处理字段会一并保留。
 
 ### ArkTS 混淆
 
@@ -121,15 +121,15 @@ API 26 起使用 `"26.0.0"` 这样的版本字符串，数字 `26` 等同于 `"2
 }
 ```
 
-`enable` 必填。设为 `true` 时，`files` 至少包含一个已存在且可读的规则文件；设为 `false` 时关闭混淆。
+`enable` 必填。设为 `true` 时开启混淆，`files` 可省略；设为 `false` 时关闭混淆。
 
-规则文件路径相对应用根目录，使用 `/` 分隔，不能包含 `..`。文件必须位于应用目录内、`harmony/` 目录之外，符号链接指向的文件也需满足这一要求。
+规则文件可使用相对应用根目录的路径或绝对路径，包括共享规则和原生工程内的规则。插件会将路径转换为相对原生模块目录的路径，文件由 Hvigor 在构建时读取，因此也可以由其他插件生成。
 
 规则内容参见 [ArkTS 混淆配置](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/ide-build-obfuscation)。规则中的 keep、namecache 等相对路径以规则文件所在目录为基准。
 
 ## 从旧配置迁移
 
-`expo.harmony` 下的 `targetApiVersion`、`targetSdkVersion`、`compatibleSdkVersion` 和 `abiFilters` 仍可使用。迁移时，将这些参数移到本插件的 `harmony` 选项中，并将 `targetApiVersion` 改为 `targetSdkVersion`。同一参数在两处配置且值不一致时会报错。
+`expo.harmony` 下的 `targetApiVersion`、`targetSdkVersion`、`compatibleSdkVersion` 和 `abiFilters` 仍可使用。迁移时，将这些参数移到本插件的 `harmony` 选项中，并将 `targetApiVersion` 改为 `targetSdkVersion`。插件选项会覆盖旧配置，重复应用插件时，后面的同名选项覆盖前面的选项。
 
 ## Author
 

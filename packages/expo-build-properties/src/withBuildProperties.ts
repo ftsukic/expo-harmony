@@ -1,5 +1,5 @@
-import { isDeepStrictEqual } from 'node:util';
 import { createRequire } from 'node:module';
+import path from 'node:path';
 
 import {
   createRunOncePlugin,
@@ -14,12 +14,10 @@ import {
 
 import {
   applyBuildPropertiesConfig,
-  validateRuleFiles,
   validatePluginConfig,
   type HarmonyBuildProperties,
   type PluginConfigType,
 } from './pluginConfig';
-import { ExpoBuildPropertiesError } from './errors';
 
 const pkg = createRequire(__filename)('../package.json') as { name: string; version: string };
 type Json = Record<string, unknown>;
@@ -88,7 +86,12 @@ const withMods: HarmonyConfigPlugin = (config) => {
       : {
           enable: rules.enable,
           // Keep the source file location: ArkGuard resolves keep/namecache paths relative to it.
-          ...(rules.files?.length ? { files: rules.files.map(file => `../../${file}`) } : {}),
+          ...(rules.files?.length
+            ? { files: rules.files.map(file => path.relative(
+                path.dirname(mod.modRequest.modFile!),
+                path.resolve(mod.modRequest.projectRoot, file)
+              ).split(path.sep).join('/')) }
+            : {}),
         });
     set(ark, 'obfuscation', obfuscation);
     set(release, 'arkOptions', ark);
@@ -123,20 +126,16 @@ export const withBuildPropertiesDefaults = createRunOncePlugin(withMods, pkg.nam
 export const withBuildProperties: HarmonyConfigPlugin<PluginConfigType | void> = (config, options) => {
   if (!config.harmony?.bundleName && !config.platforms?.includes('harmony')) return config;
 
-  const props = validatePluginConfig(options ?? {});
+  const next = validatePluginConfig(options ?? {});
+  const previous: HarmonyBuildProperties | undefined = config._internal?.harmonyBuildProperties;
+  const props: HarmonyBuildProperties = {
+    ...previous,
+    ...next,
+    ...(previous?.nativeLib || next.nativeLib ? { nativeLib: { ...previous?.nativeLib, ...next.nativeLib } } : {}),
+    ...(previous?.release || next.release ? { release: { ...previous?.release, ...next.release } } : {}),
+  };
   config = applyBuildPropertiesConfig(config, props);
   config._internal ??= {};
-
-  const previous = config._internal.harmonyBuildProperties;
-  const root = config._internal.projectRoot;
-
-  if (previous !== undefined && !isDeepStrictEqual(previous, props)) {
-    throw new ExpoBuildPropertiesError('expo-build-properties is configured more than once with different options.');
-  }
-  if (props.release?.obfuscation?.files?.length && !root) {
-    throw new ExpoBuildPropertiesError('Obfuscation rule files require an Expo projectRoot.');
-  }
-  if (root) validateRuleFiles(root, props);
 
   config._internal.harmonyBuildProperties = props;
   config = registerHarmonyConfigPlugin(config, pkg.name);

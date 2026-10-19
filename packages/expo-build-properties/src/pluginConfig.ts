@@ -1,8 +1,6 @@
-import fs from 'node:fs';
 import path from 'node:path';
 
 import {
-  HarmonyPaths,
   normalizeHarmonyConfig,
   parseHarmonySdkVersion,
   type ExpoConfigWithHarmony,
@@ -15,19 +13,21 @@ export interface NativeLibFilter {
   pickFirsts?: string[];
   pickLasts?: string[];
   enableOverride?: boolean;
+  [key: string]: unknown;
 }
 
 export interface DebugSymbol {
-  strip: boolean;
+  strip?: boolean;
   /** Hvigor semantics: exceptions to strip=true, or the only stripped libraries when strip=false. */
   exclude?: string[];
+  [key: string]: unknown;
 }
 
 export interface HarmonyBuildProperties {
   compatibleSdkVersion?: number | string;
   targetSdkVersion?: number | string;
-  abiFilters?: ('arm64-v8a' | 'x86_64')[];
-  nativeCompiler?: 'BiSheng' | 'Original';
+  abiFilters?: string[];
+  nativeCompiler?: string;
   nativeLib?: { filter?: NativeLibFilter };
   compressNativeLibs?: boolean;
   extractNativeLibs?: boolean;
@@ -44,13 +44,13 @@ export interface PluginConfigType {
   harmony?: HarmonyBuildProperties;
 }
 
-function object(value: unknown, field: string, keys: readonly string[]): Record<string, unknown> {
+function object(value: unknown, field: string, keys?: readonly string[]): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new ExpoBuildPropertiesError(`${field} must be an object.`);
   }
 
   for (const key of Object.keys(value)) {
-    if (!keys.includes(key)) throw new ExpoBuildPropertiesError(`${field}.${key} is not supported.`);
+    if (keys && !keys.includes(key)) throw new ExpoBuildPropertiesError(`${field}.${key} is not supported.`);
   }
 
   return value as Record<string, unknown>;
@@ -82,18 +82,12 @@ function validateBuildProperties(value: unknown): HarmonyBuildProperties {
   }
 
   if (props.abiFilters !== undefined) {
-    const abis = strings(props.abiFilters, 'abiFilters');
-
-    if (!abis.length || abis.some(abi => abi !== 'arm64-v8a' && abi !== 'x86_64')) {
-      throw new ExpoBuildPropertiesError('abiFilters must contain arm64-v8a and/or x86_64.');
-    }
-
-    result.abiFilters = abis as NonNullable<HarmonyBuildProperties['abiFilters']>;
+    result.abiFilters = strings(props.abiFilters, 'abiFilters');
   }
 
   if (props.nativeCompiler !== undefined) {
-    if (props.nativeCompiler !== 'BiSheng' && props.nativeCompiler !== 'Original') {
-      throw new ExpoBuildPropertiesError('nativeCompiler must be BiSheng or Original.');
+    if (typeof props.nativeCompiler !== 'string' || !props.nativeCompiler.trim()) {
+      throw new ExpoBuildPropertiesError('nativeCompiler must be a non-empty string.');
     }
 
     result.nativeCompiler = props.nativeCompiler;
@@ -108,17 +102,13 @@ function validateBuildProperties(value: unknown): HarmonyBuildProperties {
     result.nativeLib = {};
 
     if (native.filter !== undefined) {
-      const filter = object(native.filter, 'nativeLib.filter', ['excludes', 'pickFirsts', 'pickLasts', 'enableOverride']);
-      const output: NativeLibFilter = {};
+      const filter = object(native.filter, 'nativeLib.filter');
+      const output: NativeLibFilter = { ...filter };
 
       for (const key of ['excludes', 'pickFirsts', 'pickLasts'] as const) {
         if (filter[key] !== undefined) output[key] = strings(filter[key], `nativeLib.filter.${key}`);
       }
       if (filter.enableOverride !== undefined) output.enableOverride = boolean(filter.enableOverride, 'nativeLib.filter.enableOverride');
-
-      if (output.pickFirsts?.some(pattern => output.pickLasts?.includes(pattern))) {
-        throw new ExpoBuildPropertiesError('The same SO pattern cannot appear in both pickFirsts and pickLasts.');
-      }
 
       result.nativeLib.filter = output;
     }
@@ -129,10 +119,11 @@ function validateBuildProperties(value: unknown): HarmonyBuildProperties {
     result.release = {};
 
     if (release.debugSymbol !== undefined) {
-      const symbol = object(release.debugSymbol, 'release.debugSymbol', ['strip', 'exclude']);
+      const symbol = object(release.debugSymbol, 'release.debugSymbol');
 
       result.release.debugSymbol = {
-        strip: boolean(symbol.strip, 'release.debugSymbol.strip'),
+        ...symbol,
+        ...(symbol.strip === undefined ? {} : { strip: boolean(symbol.strip, 'release.debugSymbol.strip') }),
         ...(symbol.exclude === undefined ? {} : { exclude: strings(symbol.exclude, 'release.debugSymbol.exclude') }),
       };
     }
@@ -142,18 +133,7 @@ function validateBuildProperties(value: unknown): HarmonyBuildProperties {
       const enable = boolean(rules.enable, 'release.obfuscation.enable');
       const files = rules.files === undefined ? [] : strings(rules.files, 'release.obfuscation.files');
 
-      if (enable && files.length === 0) {
-        throw new ExpoBuildPropertiesError('Enabling ArkTS obfuscation requires at least one rule file.');
-      }
-
-      for (const file of files) {
-        if (path.isAbsolute(file) || path.win32.isAbsolute(file) || file.includes('\\')
-          || file.split('/').includes('..') || path.posix.normalize(file).startsWith('harmony/')) {
-          throw new ExpoBuildPropertiesError(`Obfuscation input must be an application-relative path outside harmony/: ${file}`);
-        }
-      }
-
-      result.release.obfuscation = { enable, files: [...new Set(files.map(file => path.posix.normalize(file)))] };
+      result.release.obfuscation = { enable, files: [...new Set(files.map(file => path.normalize(file)))] };
     }
   }
 
@@ -174,21 +154,10 @@ export function applyBuildPropertiesConfig<Config extends ExpoConfigWithHarmony>
     const value = props[key];
     if (value === undefined) continue;
 
-    const legacy = harmony[key] ?? (key === 'targetSdkVersion' ? harmony.targetApiVersion : undefined);
-
-    if (legacy !== undefined && parseHarmonySdkVersion(legacy, `harmony.${key}`).native !== value) {
-      throw new ExpoBuildPropertiesError(`expo.harmony.${key} conflicts with expo-build-properties. Remove the legacy setting.`);
-    }
-
     harmony[key] = value;
   }
 
   if (props.abiFilters !== undefined) {
-    if (harmony.abiFilters !== undefined
-      && JSON.stringify([...new Set(harmony.abiFilters)].sort()) !== JSON.stringify([...props.abiFilters].sort())) {
-      throw new ExpoBuildPropertiesError('expo.harmony.abiFilters conflicts with expo-build-properties. Remove the legacy setting.');
-    }
-
     harmony.abiFilters = props.abiFilters;
   }
 
@@ -196,29 +165,4 @@ export function applyBuildPropertiesConfig<Config extends ExpoConfigWithHarmony>
   normalizeHarmonyConfig(result);
 
   return result;
-}
-
-export function validateRuleFiles(root: string, props: HarmonyBuildProperties): void {
-  for (const source of props.release?.obfuscation?.files ?? []) {
-    const input = path.resolve(root, source);
-    let real: string;
-    let stat: fs.Stats;
-
-    try {
-      real = fs.realpathSync(input);
-      stat = fs.statSync(real);
-      fs.accessSync(real, fs.constants.R_OK);
-    } catch (cause) {
-      throw new ExpoBuildPropertiesError(`Cannot read obfuscation rule file ${source}: ${(cause as Error).message}`, { cause });
-    }
-
-    if (!stat.isFile()) {
-      throw new ExpoBuildPropertiesError(`Not an obfuscation rule file: ${source}`);
-    }
-
-    if (!HarmonyPaths.isInside(fs.realpathSync(root), real)
-      || HarmonyPaths.isInside(path.join(fs.realpathSync(root), 'harmony'), real)) {
-      throw new ExpoBuildPropertiesError(`Obfuscation rule file must remain inside the application and outside harmony/: ${source}`);
-    }
-  }
 }
