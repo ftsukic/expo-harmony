@@ -7,7 +7,7 @@
 ## 安装
 
 ```bash
-npm install @expo-harmony/expo-modules-core @react-native-oh/react-native-harmony@0.84.1 @react-native-ohos/react-native-worklets@1.0.0 expo-modules-core@55.0.25 'react-native-worklets@^0.7.4 || ^0.8.0'
+npm install @expo-harmony/expo-modules-core @react-native-oh/react-native-harmony@0.84.1 @react-native-ohos/react-native-worklets@1.0.1 expo-modules-core@55.0.25 'react-native-worklets@^0.7.4 || ^0.8.0'
 ```
 
 ## Author
