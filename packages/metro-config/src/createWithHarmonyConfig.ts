@@ -222,9 +222,6 @@ export function createWithHarmonyConfig({
     const rewriteRequestUrl = wrapRequestUrl(merged.server?.rewriteRequestUrl);
     const server = normalizeServer(merged.server, rewriteRequestUrl);
     const reactPackage = getEntries(options.aliases, 'options.aliases').find(([name]) => name === 'react')?.[1] || 'react';
-    const fixedRuntime = !options.resolveRequest && !options.redirects && !options.emptyModules
-      && getEntries(options.aliases, 'options.aliases').every(([name]) => name === 'react');
-
     const environment = Object.keys(process.env).filter(key => key.startsWith('EXPO_PUBLIC_')).sort()
       .map(key => [key, process.env[key]]);
     const cache = process.env.NODE_ENV === 'production'
@@ -276,7 +273,7 @@ export function createWithHarmonyConfig({
           normalizePath,
           options,
           projectRoot: root,
-        }), { harmonyRuntime: { reactPackage, harmonyPackage, fixedRuntime } }),
+        }), { harmonyRuntime: { reactPackage, harmonyPackage } }),
       },
     } as unknown as T & InputConfigT;
   };
