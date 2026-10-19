@@ -8,30 +8,25 @@ type JsonObject = Record<string, ESObject>;
 const VERSION_FIELDS: string[] = ['runtimeVersion', 'expo', 'expoModulesCore', 'rnoh', 'react', 'hermes'];
 const SETTING_FIELDS: string[] = ['permissions', 'querySchemes', 'backgroundModes', 'abiFilters'];
 const MODULE_FIELDS: string[] = ['modules', 'services', 'registrations', 'artifacts'];
-const TOKEN = /^[A-Za-z0-9@][A-Za-z0-9@._+:()/-]{0,199}$/;
 const DIGEST = /^[a-f0-9]{64}$/;
 
 function object(value: ESObject): JsonObject | undefined {
   return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as JsonObject : undefined;
 }
 
-function token(value: ESObject): value is string {
-  return typeof value === 'string' && TOKEN.test(value) && !value.includes('://') && !value.includes('..') && !/^[A-Za-z]:/.test(value);
+function nonEmptyString(value: ESObject): value is string {
+  return typeof value === 'string' && value.length > 0;
 }
 
 function strings(value: ESObject): string[] | undefined {
-  if (!Array.isArray(value) || value.some((item: ESObject): boolean => !token(item))) return undefined;
+  if (!Array.isArray(value) || value.some((item: ESObject): boolean => !nonEmptyString(item))) return undefined;
   const result = value as string[];
   return new Set(result).size === result.length ? result : undefined;
 }
 
-function apiVersion(value: ESObject, schema: ESObject): number[] | undefined {
-  if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 13 && value < 26) return [value, 0, 0];
-  if (schema === 2 && typeof value === 'string' && /^(?:[1-9]\d{1,2})\.(?:0|[1-9]\d{0,2})\.(?:0|[1-9]\d{0,2})$/.test(value)) {
-    const parts = value.split('.').map((part: string): number => Number(part));
-    if (parts[0] >= 26) return parts;
-  }
-  return undefined;
+function apiVersion(value: ESObject, schema: ESObject): boolean {
+  return (typeof value === 'number' && Number.isSafeInteger(value) && value > 0)
+    || (schema === 2 && typeof value === 'string' && /^\d+\.\d+\.\d+$/.test(value));
 }
 
 function validate(value: ESObject, label: string): JsonObject {
@@ -49,7 +44,7 @@ function validate(value: ESObject, label: string): JsonObject {
   }
   if (typeof contract.development !== 'boolean') throw new DevLauncherError('ERR_HARMONY_INCOMPATIBLE', `${label}.development must be boolean.`);
   for (const field of VERSION_FIELDS) {
-    if (field === 'runtimeVersion' ? typeof contract[field] !== 'string' || contract[field].length === 0 : !token(contract[field])) {
+    if (!nonEmptyString(contract[field])) {
       throw new DevLauncherError('ERR_HARMONY_INCOMPATIBLE', `${label}.${field} must be an explicit version.`);
     }
   }
@@ -58,7 +53,7 @@ function validate(value: ESObject, label: string): JsonObject {
   const packages = new Set<string>();
   for (const raw of contract.modules as ESObject[]) {
     const module = object(raw);
-    if (module === undefined || !token(module.packageName) || !token(module.packageVersion) || packages.has(module.packageName)) {
+    if (module === undefined || !nonEmptyString(module.packageName) || !nonEmptyString(module.packageVersion) || packages.has(module.packageName)) {
       throw new DevLauncherError('ERR_HARMONY_INCOMPATIBLE', `${label}.modules contains an invalid or duplicate package.`);
     }
     packages.add(module.packageName);
@@ -72,27 +67,22 @@ function validate(value: ESObject, label: string): JsonObject {
   }
 
   const config = object(contract.config);
-  if (config === undefined || !token(config.nativeCompiler)) throw new DevLauncherError('ERR_HARMONY_INCOMPATIBLE', `${label}.config is invalid.`);
+  if (config === undefined || !nonEmptyString(config.nativeCompiler)) throw new DevLauncherError('ERR_HARMONY_INCOMPATIBLE', `${label}.config is invalid.`);
 
-  const target = apiVersion(config.targetApiVersion, schema);
+  const target = config.targetApiVersion === undefined || apiVersion(config.targetApiVersion, schema);
   const compatible = apiVersion(config.compatibleApiVersion, schema);
-  if (target === undefined || compatible === undefined || compareApi(compatible, target) > 0) {
+  if (!target || !compatible) {
     throw new DevLauncherError('ERR_HARMONY_INCOMPATIBLE', `${label}.config API versions are invalid.`);
   }
   for (const field of SETTING_FIELDS) {
     const items = strings(config[field]);
-    if (items === undefined || (field === 'abiFilters' && items.length === 0)) throw new DevLauncherError('ERR_HARMONY_INCOMPATIBLE', `${label}.config.${field} is invalid.`);
+    if (items === undefined) throw new DevLauncherError('ERR_HARMONY_INCOMPATIBLE', `${label}.config.${field} is invalid.`);
   }
   if (config.nativeLibFilterHash !== undefined && (schema !== 2 || typeof config.nativeLibFilterHash !== 'string' || !DIGEST.test(config.nativeLibFilterHash))) {
     throw new DevLauncherError('ERR_HARMONY_INCOMPATIBLE', `${label}.config.nativeLibFilterHash is invalid.`);
   }
 
   return contract;
-}
-
-function compareApi(left: number[], right: number[]): number {
-  for (let index = 0; index < 3; index++) if (left[index] !== right[index]) return left[index] - right[index];
-  return 0;
 }
 
 function requireObject(parent: JsonObject, field: string): JsonObject {
@@ -183,6 +173,7 @@ function checkCompatibility(client: JsonObject, requirements: JsonObject): void 
   const available = client.config as JsonObject;
   const required = requirements.config as JsonObject;
   for (const field of ['nativeCompiler', 'targetApiVersion', 'compatibleApiVersion', 'nativeLibFilterHash']) {
+    if (field === 'targetApiVersion' && (available[field] === undefined || required[field] === undefined)) continue;
     if (available[field] !== required[field]) throw new DevLauncherError('ERR_HARMONY_INCOMPATIBLE', `Native build setting ${field} differs.`);
   }
 
