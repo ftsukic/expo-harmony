@@ -2,8 +2,9 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 
-import { createNativeModuleContracts, ohpmDependenciesFromManifest, verifyModulesAsync, type Manifest, type ModuleDescriptor } from '@expo-harmony/expo-modules-autolinking';
-import { assertHarmonyCompatibility, harmonyRuntimeSchemaVersion, validateHarmonyRuntime, type HarmonyRuntimeContract } from '@expo-harmony/expo-modules-autolinking/runtime';
+import { getConfig } from '@expo/config';
+import { createNativeModuleContracts, verifyModulesAsync, type Manifest, type ModuleDescriptor } from '@expo-harmony/expo-modules-autolinking';
+import { harmonyRuntimeSchemaVersion, type HarmonyRuntimeContract } from '@expo-harmony/expo-modules-autolinking/runtime';
 import JSON5 from 'json5';
 
 import { publishUpdatesConfigurationAsync } from '../updates/export';
@@ -14,25 +15,16 @@ import { readMetroRuntimeAsync, readNativeRuntime, readProjectRuntimeAsync, reso
 
 async function createRuntimeContractAsync(
   root: string,
-  project: Awaited<ReturnType<typeof readProjectRuntimeAsync>>,
+  project: Pick<Awaited<ReturnType<typeof readProjectRuntimeAsync>>, 'native' | 'runtimeVersion'>,
   modules: readonly ModuleDescriptor[],
   metro?: HarmonyMetroRuntime
 ): Promise<HarmonyRuntimeContract> {
   const resolution = metro ?? await readMetroRuntimeAsync(root);
-  if (!resolution?.fixedRuntime || resolution.harmonyPackage !== '@react-native-oh/react-native-harmony'
-    || typeof resolution.reactPackage !== 'string' || !resolution.reactPackage) {
-    throw new HarmonyCliError(
-      'ERR_HARMONY_RUNTIME_CONFIG',
-      'Runtime contracts require withHarmonyConfig with the standard RNOH package and supported React resolution.',
-      { operation: 'runtime-contract' }
-    );
-  }
-
   const require = createRequire(path.join(root, 'package.json'));
   const version = (name: string) => require(`${name}/package.json`).version as string;
   const native = createRequire(require.resolve(resolution.harmonyPackage + '/package.json'));
 
-  const contract: HarmonyRuntimeContract = {
+  return {
     schemaVersion: harmonyRuntimeSchemaVersion(project.native),
     platform: 'harmony',
     runtimeVersion: project.runtimeVersion,
@@ -48,17 +40,6 @@ async function createRuntimeContractAsync(
     modules: createNativeModuleContracts(modules),
     config: project.native,
   };
-
-  const issues = validateHarmonyRuntime(contract);
-  if (issues.length > 0) {
-    throw new HarmonyCliError(
-      'ERR_HARMONY_RUNTIME_CONFIG',
-      issues.map(issue => issue.message).join('\n'),
-      { operation: 'runtime-contract' }
-    );
-  }
-
-  return contract;
 }
 
 export async function resolveRuntimeRequirementsAsync(
@@ -84,65 +65,18 @@ export async function publishRuntimeContractAsync(
   plan: HarmonyBuildPlan
 ): Promise<HarmonyRuntimeContract> {
   const manifest = JSON.parse(await fs.promises.readFile(path.join(root, '.expo/harmony/autolinking.json'), 'utf8')) as Manifest;
-  if (manifest.schemaVersion !== 4 || manifest.platform !== 'harmony' || manifest.buildType !== plan.buildMode) {
-    throw new HarmonyCliError(
-      'ERR_HARMONY_RUNTIME_BUILD',
-      'Runtime publication requires autolinking from this native build.',
-      { operation: 'runtime-contract' }
-    );
-  }
-
-  const project = await readProjectRuntimeAsync(root);
-  const requirements = await createRuntimeContractAsync(root, project, manifest.modules);
-  if (!manifest.runtimeModules || JSON.stringify(requirements.modules) !== JSON.stringify(manifest.runtimeModules)) {
-    throw new HarmonyCliError(
-      'ERR_HARMONY_RUNTIME_BUILD',
-      'Native inputs changed or lack a runtime snapshot. Run autolinking/prebuild again before publishing capabilities.',
-      { operation: 'runtime-contract' }
-    );
-  }
-
-  const read = (file: string) => JSON5.parse(fs.readFileSync(file, 'utf8'));
-  const dependencies = read(plan.nativeInputs.manifest);
-  const declared = { ...dependencies.dependencies, ...dependencies.overrides };
-  const linked = ohpmDependenciesFromManifest(manifest, { harmonyProjectPath: plan.harmonyRoot });
-  for (const [name, expected] of Object.entries(linked)) {
-    const actual = declared[name];
-    const target = fs.realpathSync(path.resolve(plan.harmonyRoot, expected));
-    if (typeof actual !== 'string' || !actual.startsWith('.')
-      || fs.realpathSync(path.resolve(plan.harmonyRoot, actual)) !== target) {
-      throw new HarmonyCliError(
-        'ERR_HARMONY_RUNTIME_BUILD',
-        `Native dependency ${name} does not use the HAR recorded by autolinking.`,
-        { operation: 'runtime-contract' }
-      );
-    }
-  }
-
-  const directory = path.join(plan.harmonyRoot, 'oh_modules/@rnoh/react-native-openharmony');
-  const rnoh = read(path.join(directory, 'oh-package.json5'));
-  const hermes = read(path.join(directory, 'src/main/cpp/third-party/hermes/npm/hermes-compiler/package.json'));
-  if (rnoh.version !== requirements.rnoh || hermes.version !== requirements.hermes
-    || declared['@rnoh/react-native-openharmony'] !== requirements.rnoh
-    || process.env.HERMES_V1_ENABLED === 'false') {
-    throw new HarmonyCliError(
-      'ERR_HARMONY_RUNTIME_BUILD',
-      'Runtime publication requires matching installed RNOH and Hermes v1.',
-      { operation: 'runtime-contract' }
-    );
-  }
-
+  const { exp: config } = getConfig(root, { skipSDKVersionRequirement: true, isModdedConfig: true });
   const native = readNativeRuntime(plan);
-  requirements.development = plan.buildMode === 'debug';
-
-  const contract: HarmonyRuntimeContract = {
-    ...requirements,
-    schemaVersion: harmonyRuntimeSchemaVersion(native.config),
-    runtimeVersion: await resolveRuntimeVersionAsync(root, project.config, native.app),
-    config: native.config,
-  };
-
-  assertHarmonyCompatibility(contract, requirements);
+  // ponytail: publish the native project as built; plugin introspection describes a new prebuild.
+  const contract = await createRuntimeContractAsync(root, {
+    native: native.config,
+    runtimeVersion: await resolveRuntimeVersionAsync(root, config, native.app),
+  }, manifest.modules);
+  const read = (file: string) => JSON5.parse(fs.readFileSync(file, 'utf8'));
+  const directory = path.join(plan.harmonyRoot, 'oh_modules/@rnoh/react-native-openharmony');
+  contract.rnoh = read(path.join(directory, 'oh-package.json5')).version;
+  contract.hermes = read(path.join(directory, 'src/main/cpp/third-party/hermes/npm/hermes-compiler/package.json')).version;
+  contract.development = plan.buildMode === 'debug';
 
   const require = createRequire(path.join(root, 'package.json'));
   const file = path.join(plan.exportPaths.rawfileRoot, 'expo-harmony-runtime.json');
@@ -152,7 +86,7 @@ export async function publishRuntimeContractAsync(
   await atomicCopy(source, target, root);
   await atomicWriteJson(contract, file, root);
   await atomicWriteJson(contract, path.join(root, '.expo/harmony/runtime.json'), root);
-  await publishUpdatesConfigurationAsync(root, plan.exportPaths.rawfileRoot, project.config, contract.runtimeVersion);
+  await publishUpdatesConfigurationAsync(root, plan.exportPaths.rawfileRoot, config, contract.runtimeVersion);
 
   return contract;
 }

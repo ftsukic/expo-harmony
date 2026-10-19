@@ -6,7 +6,7 @@ import { createFingerprintAsync, type HashSource } from '@expo/fingerprint';
 import { createNativeModuleContracts, verifyModulesAsync } from '@expo-harmony/expo-modules-autolinking';
 import { HarmonyCliError } from '../errors';
 
-export async function fingerprintHarmonyAsync(root: string) {
+export async function fingerprintHarmonyAsync(root: string, harmonyPackage: string) {
   const result = await verifyModulesAsync({ projectRoot: root });
   if (!result.valid) throw new HarmonyCliError('ERR_HARMONY_FINGERPRINT', 'Build and verify Harmony native modules before calculating the runtime fingerprint.', { operation: 'fingerprint' });
 
@@ -23,7 +23,7 @@ export async function fingerprintHarmonyAsync(root: string) {
 
   const sources: HashSource[] = [{ type: 'contents', id: 'harmonyAutolinking', contents: JSON.stringify(modules), reasons: ['harmonyAutolinking'] }];
 
-  for (const name of ['@react-native-oh/react-native-harmony', '@expo-harmony/template', '@expo-harmony/config-plugins', '@expo-harmony/prebuild-config', '@expo-harmony/expo-build-properties']) {
+  for (const name of [harmonyPackage, '@expo-harmony/template', '@expo-harmony/config-plugins', '@expo-harmony/prebuild-config', '@expo-harmony/expo-build-properties']) {
     const file = require.resolve(name + '/package.json');
     sources.push({ type: 'dir', filePath: path.relative(root, path.dirname(file)), reasons: ['harmonyNativeToolchain'] });
   }

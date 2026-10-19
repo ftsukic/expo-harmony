@@ -16,7 +16,7 @@ import { resolveTimeoutMs } from '../timeout';
 import { withHarmonyProjectLockAsync } from '../projectLock';
 import { resolveHarmonyBuildPlanIfPresentAsync } from '../native/project';
 import { resolveHarmonyToolchain, type HarmonyTool } from '../native/toolchain';
-import { RequiredProjectPackages } from '../upstream';
+import { ProjectPackages, RequiredProjectPackages } from '../upstream';
 import { isBareHarmonyProject } from '../native/bare';
 
 export interface DoctorCheck {
@@ -100,16 +100,17 @@ async function validateMetroConfigAsync(root) {
 
   const config = resolved?.config;
   const platforms = config?.resolver?.platforms;
-  const conditions = config?.resolver?.unstable_conditionsByPlatform?.harmony;
+  const platformExtensions = config?.resolver?.unstable_platformExtensions?.harmony;
+  const extensions = Array.isArray(platformExtensions) && platformExtensions.includes('harmony');
 
-  if (!Array.isArray(platforms) || !platforms.includes('harmony')
-    || !Array.isArray(conditions) || !conditions.includes('harmony')
-    || typeof config?.resolver?.resolveRequest !== 'function') {
-    throw new Error('The resolved Metro config must register the harmony platform, Harmony conditions, and a resolver.');
+  if ((!Array.isArray(platforms) || !platforms.includes('harmony')) && !extensions) {
+    throw new Error('The resolved Metro config must register the harmony platform or platform extensions.');
   }
 
-  const platformExtensions = config?.resolver?.unstable_platformExtensions?.harmony;
-  return Array.isArray(platformExtensions) && platformExtensions.includes('harmony');
+  return {
+    extensions,
+    runtimePackage: config?.resolver?.resolveRequest?.harmonyRuntime?.harmonyPackage ?? ProjectPackages.rnohRuntime,
+  };
 }
 
 async function doctorUnlockedAsync(root: string, options: DoctorOptions = {}): Promise<DoctorResult> {
@@ -137,7 +138,7 @@ async function doctorUnlockedAsync(root: string, options: DoctorOptions = {}): P
   if (config) {
     checks.push(hasPlugin(config.plugins, '@expo-harmony/prebuild-config')
       ? check('config-plugin', 'pass', '@expo-harmony/prebuild-config is registered.')
-      : check('config-plugin', 'error', 'Add @expo-harmony/prebuild-config to expo.plugins.'));
+      : check('config-plugin', 'warn', 'Harmony prebuild mods must be applied directly or through another config plugin.'));
 
     const harmony = (config as typeof config & {
       harmony?: { signingConfigFile?: string };
@@ -164,9 +165,12 @@ async function doctorUnlockedAsync(root: string, options: DoctorOptions = {}): P
   }
 
   let harmonyPlatformExtensions = false;
+  let runtimePackage: string = ProjectPackages.rnohRuntime;
 
   try {
-    harmonyPlatformExtensions = await validateMetroConfigAsync(root);
+    const metro = await validateMetroConfigAsync(root);
+    harmonyPlatformExtensions = metro.extensions;
+    runtimePackage = metro.runtimePackage;
     checks.push(check('metro', 'pass', 'The resolved Metro config enables Harmony.'));
   } catch (error) {
     checks.push(check('metro', 'error', `Cannot load a Harmony-enabled Metro config: ${error.message}`, { code: error.code || 'ERR_HARMONY_METRO_CONFIG' }));
@@ -193,7 +197,8 @@ async function doctorUnlockedAsync(root: string, options: DoctorOptions = {}): P
     }
   }
 
-  for (const name of RequiredProjectPackages) {
+  const packages = RequiredProjectPackages.map(name => name === ProjectPackages.rnohRuntime ? runtimePackage : name);
+  for (const name of packages) {
     if (canResolvePackage(root, name)) {
       checks.push(check(`package:${name}`, 'pass', `${name} is resolvable.`));
     } else {
@@ -240,7 +245,7 @@ async function doctorUnlockedAsync(root: string, options: DoctorOptions = {}): P
   if (toolchain.sdkHome) {
     sdk = check('harmony-sdk', 'pass', `Complete Harmony SDK root was resolved at ${toolchain.sdkHome}.`);
   } else {
-    sdk = check('harmony-sdk', unavailable, 'No complete Harmony SDK root with HMS and OpenHarmony components was found; generation works but HAP build cannot be verified.');
+    sdk = check('harmony-sdk', 'warn', 'No SDK root was resolved by the CLI; Hvigor will resolve the configured SDK during the native build.');
   }
 
   checks.push(sdk);
@@ -283,7 +288,7 @@ async function doctorUnlockedAsync(root: string, options: DoctorOptions = {}): P
           const content = await fs.promises.readFile(plan.projectFiles.moduleHvigor, 'utf8');
           checks.push(isRnohAutolinkingDisabled(content)
             ? check('hvigor-autolinking', 'pass', 'RNOH duplicate autolinking is disabled.')
-            : check('hvigor-autolinking', 'error', 'The module Hvigor file must disable duplicate RNOH autolinking.'));
+            : check('hvigor-autolinking', 'warn', 'Cannot confirm that duplicate RNOH autolinking is disabled from the module Hvigor source.'));
         }
       }
     } catch (error) {

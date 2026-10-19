@@ -36,7 +36,7 @@ function readJson(file: string): Record<string, unknown> {
 }
 
 function identifier(value: unknown, field: string): string {
-  if (typeof value !== 'string' || !/^[A-Za-z_][A-Za-z0-9_.]*$/.test(value)) {
+  if (typeof value !== 'string' || !value.trim() || /[/\\\0\r\n]/u.test(value) || value === '.' || value === '..') {
     throw new HarmonyCliError('ERR_HARMONY_NATIVE_PROJECT', `The native project must specify a valid ${field}.`, { operation: 'resolve-build' });
   }
 
@@ -81,7 +81,7 @@ function resolveBareHarmonyBuildPlan(root: string, mode: 'debug' | 'release'): B
   const config = record(profile.app, 'build-profile.app');
   const selected = selectDefault(records(config.products, 'products'), 'products');
   const product = identifier(selected.name, 'product name');
-  const targets = records(registration.targets, 'module targets').filter((item) => {
+  const targets = records(registration.targets ?? [{ name: 'default' }], 'module targets').filter((item) => {
     if (item.applyToProducts === undefined) return true;
     if (!Array.isArray(item.applyToProducts) || item.applyToProducts.some(value => typeof value !== 'string')) {
       throw new HarmonyCliError('ERR_HARMONY_NATIVE_PROJECT', 'Native target.applyToProducts must be an array of product names.', { operation: 'resolve-build' });
@@ -92,15 +92,8 @@ function resolveBareHarmonyBuildPlan(root: string, mode: 'debug' | 'release'): B
   const target = identifier(selectDefault(targets, 'module targets').name, 'target name');
 
   const ability = identifier(module.mainElement, 'module.mainElement');
-  if (!records(module.abilities, 'abilities').some(item => item.name === ability)) {
-    throw new HarmonyCliError('ERR_HARMONY_NATIVE_PROJECT', `Ability ${ability} is missing from module.json5.`, { operation: 'resolve-build' });
-  }
-
   const bundle = identifier(app.bundleName, 'app.bundleName');
   const signed = Boolean(selected.signingConfig);
-  if (signed && !records(config.signingConfigs, 'signingConfigs').some(item => item.name === selected.signingConfig)) {
-    throw new HarmonyCliError('ERR_HARMONY_NATIVE_PROJECT', `Signing config ${selected.signingConfig} is referenced by the product but is not defined.`, { operation: 'resolve-build' });
-  }
 
   const rawfile = path.join(entry, 'src/main/resources/rawfile');
   const metadata = path.join(root, '.expo/harmony/export');

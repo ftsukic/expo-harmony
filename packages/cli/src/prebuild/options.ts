@@ -18,7 +18,7 @@ const PrebuildOptions = {
 function parsePrebuildArgs(argv: string[], options: { allowProject?: boolean } = {}) {
   const { positionals, values } = parseArgs(PrebuildOptions, argv);
 
-  if (values.platform !== undefined) {
+  if (values.platform !== undefined && values.platform !== 'harmony') {
     throw new HarmonyCliError(
       'ERR_HARMONY_CONFIG_INVALID',
       '--platform is fixed to harmony by expo-harmony.',

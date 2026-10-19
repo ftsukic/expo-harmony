@@ -12,6 +12,7 @@ import { resolveHarmonyBuildPlanAsync } from '../native/project';
 import { formatDiagnostics, spawnAsync } from '../process';
 import { resolveTimeoutMs } from '../timeout';
 import { resolveExpoHermesBuilder } from '../expo';
+import { readMetroRuntimeAsync } from '../runtime/config';
 import {
   assertHermesBundle, assertSourceMap, exportPaths,
   publishExportAsync, validatePublishedExportAsync,
@@ -114,7 +115,8 @@ async function exportEmbedUnlockedAsync(
       // Expo resolves hermes-compiler from react-native. For Harmony, resolve it
       // from RNOH instead of the app's Android/iOS React Native installation.
       const require = createRequire(path.join(root, 'package.json'));
-      const runtime = path.dirname(require.resolve('@react-native-oh/react-native-harmony/package.json'));
+      const metro = await readMetroRuntimeAsync(root);
+      const runtime = path.dirname(require.resolve(metro.harmonyPackage + '/package.json'));
       const modules = path.join(directory, 'node_modules');
 
       await fs.promises.mkdir(modules);

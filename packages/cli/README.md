@@ -71,7 +71,7 @@ npx expo-harmony prebuild --clean
 npx expo-harmony prebuild --check
 ```
 
-`prebuild` 根据 Expo 配置生成或更新 HarmonyOS 原生工程，仅用于 CNG 项目。它使用 `@expo-harmony/template` 模板，不接受 `--platform` 和 `--template` 选项。
+`prebuild` 根据 Expo 配置生成或更新 HarmonyOS 原生工程，仅用于 CNG 项目。平台固定为 Harmony，也可显式传入 `--platform harmony`。它使用 `@expo-harmony/template` 模板，不接受 `--template` 选项。
 
 命令会先检查项目配置和依赖，有错误时停止。这一步不要求安装好原生构建工具。
 
