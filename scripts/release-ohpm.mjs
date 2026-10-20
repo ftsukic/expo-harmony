@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 import { spawnSync } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
 import { Writable } from 'node:stream';

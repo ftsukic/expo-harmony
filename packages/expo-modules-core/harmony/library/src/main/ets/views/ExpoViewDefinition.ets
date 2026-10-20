@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 import type { ExpoModuleContext } from '../modules/ExpoModule';
 import type { ExpoSharedObjectRegistry } from '../modules/ExpoSharedObject';
 import type { Descriptor, RNComponentContext } from '@rnoh/react-native-openharmony';

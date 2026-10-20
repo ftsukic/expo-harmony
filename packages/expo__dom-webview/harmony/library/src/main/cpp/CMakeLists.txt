@@ -1,3 +1,9 @@
+# @expo-harmony-copyright
+#
+# Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+# Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+# @end-expo-harmony-copyright
+
 cmake_minimum_required(VERSION 3.19)
 project(expo_dom_webview LANGUAGES CXX)
 

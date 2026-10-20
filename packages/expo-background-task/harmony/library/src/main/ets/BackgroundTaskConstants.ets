@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 export const BACKGROUND_TASK_MODULE_NAME: string = 'ExpoBackgroundTask';
 export const BACKGROUND_TASK_TYPE: string = 'expo-background-task';
 export const EXPIRATION_EVENT_NAME: string = 'onTasksExpired';

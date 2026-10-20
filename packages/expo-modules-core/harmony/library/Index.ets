@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 export * from './src/main/ets/public-api';
 export { ExpoNetworkInspection } from './src/main/ets/appcontext/ExpoNetworkInspection';
 

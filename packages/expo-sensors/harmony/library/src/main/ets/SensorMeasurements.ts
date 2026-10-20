@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 export const GRAVITY_EARTH: number = 9.80665;
 export const NANOSECONDS_PER_MILLISECOND: number = 1_000_000;
 export const NANOSECONDS_PER_SECOND: number = 1_000_000_000;

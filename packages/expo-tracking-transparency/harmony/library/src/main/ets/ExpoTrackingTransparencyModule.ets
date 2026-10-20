@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 import { ExpoModule, ExpoModuleContext, ExpoModuleDefinition, ExpoModuleError, ExpoPermissionStatus } from '@expo-harmony/expo-modules-core';
 import { identifier } from '@kit.AdsKit';
 import { TrackingPermissions, TrackingPermissionResponse, TRACKING_PERMISSION } from './TrackingPermissions';

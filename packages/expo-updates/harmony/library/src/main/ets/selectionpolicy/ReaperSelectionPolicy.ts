@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 import { Filters, UpdateRecord } from '../UpdatesProtocol';
 import { matchesFilters } from './Filters';
 export interface ReaperSelectionPolicy { toDelete(updates: UpdateRecord[], launched: UpdateRecord | undefined, filters?: Filters): UpdateRecord[]; }

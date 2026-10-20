@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 export const PENDING_WORK_SCHEMA_VERSION: number = 3;
 export const MAXIMUM_PENDING_WORKS: number = 128;
 

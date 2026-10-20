@@ -1,4 +1,10 @@
 #!/usr/bin/env node
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
 
 import fs from 'node:fs/promises';
 import path from 'node:path';

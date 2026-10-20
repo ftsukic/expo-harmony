@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 const { createRunOncePlugin } = require('@expo-harmony/config-plugins');
 const plugin = require('expo-sqlite/app.plugin.js');
 const upstream = plugin.default ?? plugin;

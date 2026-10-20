@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 import http from 'node:http';
 
 import type { HarmonyDevelopmentManifest } from '@expo-harmony/expo-modules-autolinking/runtime';

@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 import { ExpoAbilityStage } from '@expo-harmony/expo';
 import type { ExpoHarmonyHostProvider, ExpoReactHost } from '@expo-harmony/expo';
 import { expoReactHost } from '../PackageProvider';

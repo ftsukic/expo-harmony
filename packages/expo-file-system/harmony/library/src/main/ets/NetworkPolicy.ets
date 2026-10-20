@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 import { ExpoModuleError } from '@expo-harmony/expo-modules-core';
 
 export const PROGRESS_EVENT_INTERVAL_MS: number = 100;

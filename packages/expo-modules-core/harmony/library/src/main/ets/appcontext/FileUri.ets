@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 /** Encodes an absolute local path as an authority-free file URI for use between Expo modules. */
 export function fileUriFromPath(path: string): string {
   if (!path.startsWith('/')) {

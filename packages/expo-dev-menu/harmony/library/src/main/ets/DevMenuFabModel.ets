@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 import { curves, UIContext } from '@kit.ArkUI';
 import { DevMenuPreferences } from './DevMenuPreferences';
 import { FAB_WIDTH, FabBounds, FabDrag, FabPoint, fabTarget, normalizeFabPosition, restoreFabPosition } from './DevMenuFabGeometry';

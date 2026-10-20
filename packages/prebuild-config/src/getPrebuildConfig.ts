@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 import { getConfig, type ProjectConfig } from '@expo/config';
 import { normalizeHarmonyConfig, type ExpoConfigWithHarmony } from '@expo-harmony/config-plugins';
 

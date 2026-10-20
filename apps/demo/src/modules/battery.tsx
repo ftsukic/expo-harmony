@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 import * as Battery from 'expo-battery';
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text } from 'react-native';

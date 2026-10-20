@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 import { scanBarcode, scanCore } from '@kit.ScanKit';
 import { bundleManager } from '@kit.AbilityKit';
 import type { common } from '@kit.AbilityKit';

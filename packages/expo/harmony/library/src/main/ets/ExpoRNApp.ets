@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 import { ExpoReactRootViewFactory } from './ExpoReactRootViewFactory';
 import { ExpoReactHost } from './ExpoReactHost';
 import { JSBundleProvider, RNApp, RNInstance, RNOHCoreContext, RNOHError } from '@rnoh/react-native-openharmony';

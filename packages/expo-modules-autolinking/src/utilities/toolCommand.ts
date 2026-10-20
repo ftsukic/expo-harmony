@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 /** Keep tool overrides consistent across CLI, workspace and local HAR builds. */
 export function resolveHarmonyCommand(command: string, args: readonly string[], env = process.env) {
   const configured = command === 'ohpm'

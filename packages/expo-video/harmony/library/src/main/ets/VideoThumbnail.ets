@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 import { ExpoModuleContext, ExpoModuleError, ExpoSharedRef } from '@expo-harmony/expo-modules-core';
 import { image } from '@kit.ImageKit';
 import { media } from '@kit.MediaKit';

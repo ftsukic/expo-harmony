@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 import { common, bundleManager } from '@kit.AbilityKit';
 import { preferences } from '@kit.ArkData';
 import { ExpoFunction, ExpoModule, ExpoModuleDefinition, ExpoValueTypes } from '@expo-harmony/expo-modules-core';

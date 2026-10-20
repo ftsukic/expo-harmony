@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 import { HarmonyCliError } from '../errors';
 import { CommonOptions, parseArgs } from '../args';
 import { parseHostOption } from '../development/host';

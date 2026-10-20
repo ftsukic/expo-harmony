@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 import { Headers } from '../UpdatesProtocol';
 
 export function equalHeaders(first: Headers | null | undefined, second: Headers | null | undefined): boolean {

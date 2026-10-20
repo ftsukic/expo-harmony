@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 struct Connection : Resource, std::enable_shared_from_this<Connection> {
   sqlite3 *db = nullptr;
   std::recursive_mutex mutex;

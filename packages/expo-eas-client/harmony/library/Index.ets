@@ -1,2 +1,9 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 export { EASClientID } from './src/main/ets/EASClientID';
 export { EASClientModule } from './src/main/ets/EASClientModule';

@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 import { requireNativeViewManager, requireOptionalNativeModule, UnavailabilityError } from 'expo-modules-core';
 import { useImperativeHandle, useRef } from 'react';
 import type { NativeSyntheticEvent } from 'react-native';

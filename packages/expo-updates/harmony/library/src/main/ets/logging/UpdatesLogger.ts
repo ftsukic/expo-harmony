@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 import type common from '@ohos.app.ability.common';
 import { Logger, LoggerTimer, LogHandlers, LogType } from '@expo-harmony/expo-modules-core/Logging';
 import { Json } from '../UpdatesProtocol';

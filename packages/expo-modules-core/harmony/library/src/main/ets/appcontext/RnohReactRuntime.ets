@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 import { JSBundleProvider, JsBundle, RNInstance, RNInstanceOptions, RNOHCoreContext } from '@rnoh/react-native-openharmony';
 import { ExpoModuleError } from '../modules/ExpoModuleError';
 import { ReactNativeRuntime, ReactRuntimeListener } from '../interfaces/ReactNativeRuntime';

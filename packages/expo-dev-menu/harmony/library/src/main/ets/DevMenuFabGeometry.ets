@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 // Ported from expo-dev-menu/android/.../fab/{FabState,FabUtils,ExpoVelocityTracker}.kt.
 // Copyright 2015-present 650 Industries. All rights reserved. MIT licensed.
 export const FAB_WIDTH: number = 104; // 72dp content + 16dp margin on each side

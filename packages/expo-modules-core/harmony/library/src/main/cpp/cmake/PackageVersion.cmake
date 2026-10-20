@@ -1,3 +1,9 @@
+# @expo-harmony-copyright
+#
+# Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+# Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+# @end-expo-harmony-copyright
+
 # Hvigor may rewrite a HAR manifest using unquoted keys and single quotes.
 function(read_expo_package_version path output)
   file(READ "${path}" manifest)

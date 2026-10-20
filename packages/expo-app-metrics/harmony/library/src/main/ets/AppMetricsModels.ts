@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 export const APP_STARTUP_CATEGORY: string = 'appStartup';
 export const FRAME_RATE_CATEGORY: string = 'frameRate';
 export const MEMORY_CATEGORY: string = 'memory';

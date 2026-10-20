@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 import * as SystemUI from 'expo-system-ui';
 import { palette } from '../theme';
 import { ActionButton, ActionRow, Panel, ResultPanel, useAsyncResult } from '../ui';

@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 import * as TaskManager from 'expo-task-manager';
 import { BACKGROUND_FETCH_CHECK_TASK, BACKGROUND_FETCH_TASK } from './background-fetch/tasks';
 import { BACKGROUND_TASK, BACKGROUND_TASK_CHECK } from './background-task/tasks';

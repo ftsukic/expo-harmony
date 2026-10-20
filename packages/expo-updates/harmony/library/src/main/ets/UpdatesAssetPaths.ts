@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 export function isSafeFilename(filename: string): boolean {
   return filename.length > 0 && filename !== '.' && filename !== '..' && !/[/\\\0]/.test(filename);
 }

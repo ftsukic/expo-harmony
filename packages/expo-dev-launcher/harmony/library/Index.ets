@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 export { ExpoDevLauncherModule } from './src/main/ets/ExpoDevLauncherModule';
 export { ExpoDevLauncherReactNativeHostHandler } from './src/main/ets/ExpoDevLauncherReactNativeHostHandler';
 export { ExpoDevLauncherReactActivityHandler } from './src/main/ets/ExpoDevLauncherReactActivityHandler';

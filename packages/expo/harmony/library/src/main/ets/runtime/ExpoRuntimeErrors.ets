@@ -1,3 +1,10 @@
+/*!
+ * @expo-harmony-copyright
+ *
+ * Copyright 2026-present, Baoshuo <i@baoshuo.ren> ( https://baoshuo.ren ).
+ * Released under MIT license. https://github.com/renbaoshuo/expo-harmony
+ */
+
 import { RNInstance, RNOHErrorStack } from '@rnoh/react-native-openharmony';
 import { ExpoModuleError, observeRnohDestroy } from '@expo-harmony/expo-modules-core';
 import { EXPO_RUNTIME_OBSERVE, EXPO_RUNTIME_UNOBSERVE, EXPO_RUNTIME_OBSERVED, EXPO_RUNTIME_ERROR } from './Protocol';
